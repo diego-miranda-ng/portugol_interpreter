@@ -12,61 +12,61 @@
 typedef enum _symbol
 {
 	sym_identifier,
-	sym_integer,		// 10
-	sym_float,			// 10.20
-	sym_string,			// "caractere"
-	sym_type_integer,	// inteiro
-	sym_type_float,		// real
-	sym_type_string,	// caractere
-	sym_type_boolean,	// logico
-	sym_if,				// se
-	sym_then,			// entao
-	sym_else,			// senao
-	sym_end_if,			// fimse
-	sym_case,			// caso
-	sym_end_case,		// fimcase
-	sym_equal_to,		// igual
-	sym_to,				// a
-	sym_read,			// leia
-	sym_write,			// escreva
-	sym_clear,			// limpatela
-	sym_while,			// enquanto
-	sym_do,				// faça
-	sym_end_while,		// fimenquanto
-	sym_for,			// para
-	sym_of,				// de
-	sym_repeat,			// repita
-	sym_until, 			// ate
-	sym_end_for,		// fimpara
+	sym_integer, // 10
+	sym_float, // 10.20
+	sym_string, // "caractere"
+	sym_type_integer, // inteiro
+	sym_type_float, // real
+	sym_type_string, // caractere
+	sym_type_boolean, // logico
+	sym_if,	// se
+	sym_then, // entao
+	sym_else, // senao
+	sym_end_if, // fimse
+	sym_case, // caso
+	sym_end_case, // fimcase
+	sym_equal_to, // igual
+	sym_to,	// a
+	sym_read, // leia
+	sym_write, // escreva
+	sym_clear, // limpatela
+	sym_while, // enquanto
+	sym_do,	// faça
+	sym_end_while, // fimenquanto
+	sym_for, // para
+	sym_of,	// de
+	sym_repeat,	// repita
+	sym_until, // ate
+	sym_end_for, // fimpara
 	sym_exponentiation, // ^ ou exp
-	sym_times, 			// *
-	sym_division, 		// /
-	sym_mod, 			// % ou mod
-	sym_plus, 			// +
-	sym_minus,  		// -
-	sym_or,  			// ou
-	sym_and,			// e
-	sym_not,			// nao
-	sym_or_exclusive,	// xou
-	sym_equal, 			// =
-	sym_less, 			// <
-	sym_less_equal, 	// <=
-	sym_greater, 		// >
-	sym_greater_equal, 	// >=
-	sym_allocation, 	// <-
-	sym_exclamation,	// !
-	sym_not_equal, 		// != ou <>
-	sym_comma, 			// ,
-	sym_semicolon, 		// ;
-	sym_open_paren, 	// (
-	sym_close_paren, 	// )
-	sym_open_bracket,	// [
-	sym_close_bracket,	// ]
-	sym_open_key,		// {
-	sym_close_key,		// }
-	sym_two_points,		// :
-	sym_null, 			// null
-	sym_eof				// eof
+	sym_times, // *
+	sym_division, // /
+	sym_mod, // % ou mod
+	sym_plus, // +
+	sym_minus, // -
+	sym_or, // ou
+	sym_and, // e
+	sym_not, // nao
+	sym_or_exclusive, // xou
+	sym_equal, // =
+	sym_less, // <
+	sym_less_equal, // <=
+	sym_greater, // >
+	sym_greater_equal, // >=
+	sym_allocation, // <-
+	sym_exclamation, // !
+	sym_not_equal, // != ou <>
+	sym_comma, // ,
+	sym_semicolon, // ;
+	sym_open_paren, // (
+	sym_close_paren, // )
+	sym_open_bracket, // [
+	sym_close_bracket, // ]
+	sym_open_key, // {
+	sym_close_key, // }
+	sym_two_points, // :
+	sym_null, // null
+	sym_eof // eof
 } symbol_t;
 
 // O struct "position_t" é uma estrutura em que se armazena a posição de um token.
