@@ -351,7 +351,7 @@ int string()
 	return 1;
 }
 
-int review()
+int comment()
 {
 	if(last_char == '/' && current_char == '*')
 	{
@@ -460,7 +460,7 @@ int read_token()
 	}
 	current_token.lexem.id[1] = '\0';
 	read_char();
-	if(review())
+	if(comment())
 	{
 		current_token.lexem.symbol = sym_null;
 		current_token.lexem.id[0] = '\0';
