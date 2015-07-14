@@ -1,25 +1,26 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
 
 // Esta função verifica se o atual caracter que está sendo lido é uma quebra de linha.
 // "char current_c" é o atual caractere que está sendo lido.
 // "last_c" é o caractere que foi lido antes do atual.
-// A Função retorará "1" se for uma quebra de linha e "0" caso contrário
+// A Função retornará 1 se for uma quebra de linha e 0 caso contrário
 /*-----------------------------------------------------------------------------------------*/
-int is_newline(char current_c, char last_c)
+bool is_newline(char current_c, char last_c)
 {
 	if((current_c == '\n' && last_c != '\r') || current_c == '\r')
-		return 1;
+		return true;
 	else
-		return 0;
+		return false;
 }
 
 // Esta função lê um único caractere do arquivo que foi passado como parâmetro na
 // função inicializer_scanner().
-// Ela retorna "1" se o caractere foi lido e "0" caso contrário.
+// Ela retorna 1 se o caractere foi lido e 0 caso contrário.
 /*-----------------------------------------------------------------------------------------*/
-int read_char()
+bool read_char()
 {
 	last_char = current_char;
 	if(fread(&current_char, sizeof(char), 1, input_file))
@@ -31,19 +32,19 @@ int read_char()
 		}
 		else
 			current_position.column++;
-		return 1;
+		return true;
 	}
 	else
-		return 0;
+		return false;
 }
 
-// Esta função vereifica se o "id (identificador)" que foi lido pertence ao conjunto
+// Esta função vereifica se o id(identificador) que foi lido pertence ao conjunto
 // de palavras chave do analisador.
-// "char id[]" é o identificador que será verificado no conjunto de palavras chaves.
-// "symbol_t *symbol" irá receber o endereço de memória de "symbol"
-// Esta função irá retornar "1" se for uma palavra chave e "0" caso contrário.
+// char id[] é o identificador que será verificado no conjunto de palavras chaves.
+// symbol_t *symbol irá receber o endereço de memória de symbol
+// Esta função irá retornar 1 se for uma palavra chave e 0 caso contrário.
 /*-----------------------------------------------------------------------------------------*/
-int is_keyword(char id[], symbol_t *symbol)
+bool is_keyword(char id[], symbol_t *symbol)
 {
 	int i = 0;
 	for(i = 0; i < keywords_count; i++)
@@ -51,16 +52,16 @@ int is_keyword(char id[], symbol_t *symbol)
 		if(strcmp(id, keywords[i].id) == 0)
 		{
 			*symbol = keywords[i].symbol;
-			return 1;
+			return true;
 		}
 	}
-	return 0;
+	return false;
 }
 
 // Esta função verifica se a sequencia de caracteres que está sendo lida pelo arquivo
-// passado como parâmetro na função inicializer_scanner().
+// passado como parâmetro na função inicializer_scanner() é um identificador.
 /*-----------------------------------------------------------------------------------------*/
-int identifier()
+bool identifier()
 {
 	int i = 0, count = 0, size;
 	while(i < id_max_length && !isspace(current_char) && (isalpha(current_char) || isdigit(current_char) || current_char == '_'))
@@ -73,14 +74,14 @@ int identifier()
 	current_token.lexem.id[i] = '\0';
 	if(!is_keyword(current_token.lexem.id, &current_token.lexem.symbol))
 		current_token.lexem.symbol = sym_identifier;
-	return 1;
+	return true;
 }
 
 // Esta função irá identificar se a sequencia de simbolos que está sendo lida é um
 // número inteiro ou um número decimal.
-// Se for um inteiro ou um decimal a função retornará "1" caso contrário ela irá retornar "0".
+// Se for um inteiro ou um decimal a função retornará 1 caso contrário ela irá retornar 0.
 /*-----------------------------------------------------------------------------------------*/
-int number()
+bool number()
 {
 	int i = 0;
 	while(i < id_max_length && (isdigit(current_char)))
@@ -103,7 +104,7 @@ int number()
 				fseek(input_file, -2, SEEK_CUR);
 			read_char();
 			current_token.lexem.id[i] = '\0';
-			return 1;
+			return true;
 		}
 		i++;
 		while(i < id_max_length && isdigit(current_char))
@@ -128,15 +129,15 @@ int number()
 	if(invalid)
 	{
 		current_token.lexem.symbol = sym_null;
-		return 0;
+		return false;
 	}
-	return 1;
+	return true;
 }
 
-// Esta função verifica se a sequencia de caracteres que está sendo lida é uma string
-// A função retorna "1" se for uma string, e "0" caso contrário.
+// Esta função verifica se a sequencia de caracteres que está sendo lida é um texto
+// A função retorna 1 se for um texto, e 0 caso contrário.
 /*-----------------------------------------------------------------------------------------*/
-int string()
+bool string()
 {
 	int i = 0;
 	while(i < id_max_length)
@@ -148,13 +149,14 @@ int string()
 		{
 			while(current_char != '\"' && !feof(input_file))
 				read_char();
+			
 			current_token.lexem.id[i] = '\"';
 
 			if(feof(input_file))
 			{
 				current_token.lexem.symbol = sym_eof;
 				strcpy(current_token.lexem.id, "EOF");
-				return 0;
+				return false;
 			}
 
 			i++;
@@ -164,10 +166,12 @@ int string()
 	}
 	current_token.lexem.id[i] ='\0';
 	current_token.lexem.symbol = sym_string;
-	return 1;
+	return true;
 }
 
-int comment()
+// Esta função ignora um comentário
+/*-----------------------------------------------------------------------------------------*/
+bool comment()
 {
 	if(last_char == '/' && current_char == '*')
 	{
@@ -179,31 +183,39 @@ int comment()
 		}
 
 		read_char();
-		return 1;
+		return true;
 	}
 	else if(last_char == '/' && current_char == '/')
 	{
 		while(!is_newline(current_char, last_char) && !feof(input_file))
 			read_char();
 		read_char();
-		return 1;
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 // Esta função irá capturar a próxima sequência de caracteres do arquivo passado como
 // parâmetro na função inicializer_scanner().
 /*-----------------------------------------------------------------------------------------*/
-int read_token()
+bool read_token()
 {
-	while(isspace(current_char))
+	while(isspace(current_char) && !is_newline(current_char, last_char))
 		read_char();
 
 	if(feof(input_file))
 	{
 		strcpy(current_token.lexem.id, "EOF");
 		current_token.lexem.symbol = sym_eof;
-		return 1;
+		return true;
+	}
+
+	if(is_newline(current_char, last_char))
+	{
+		strcpy(current_token.lexem.id, "\\n");
+		current_token.lexem.symbol = sym_new_line;
+		read_char();
+		return true;
 	}
 
 	if(isalpha(current_char))
@@ -232,7 +244,7 @@ int read_token()
 			current_token.lexem.symbol = sym_division;
 			break;
 		case '=':
-			current_token.lexem.symbol = sym_equal;
+			current_token.lexem.symbol = sym_allocation;
 			break;
 		case '<':
 			current_token.lexem.symbol = sym_less;
@@ -267,9 +279,6 @@ int read_token()
 		case '}':
 			current_token.lexem.symbol = sym_close_key;
 			break;
-		case '!':
-			current_token.lexem.symbol = sym_exclamation;
-			break;
 		default:
 			current_token.lexem.symbol = sym_null;
 			break;
@@ -280,12 +289,12 @@ int read_token()
 	{
 		current_token.lexem.symbol = sym_null;
 		current_token.lexem.id[0] = '\0';
-		return 1;
+		return true;
 	}
-	else if(last_char == '<' && current_char == '-')
+	else if(last_char == '<' && current_char == '=')
 	{
-		current_token.lexem.id[1] = '-';
-		current_token.lexem.symbol = sym_allocation;
+		current_token.lexem.id[1] = '=';
+		current_token.lexem.symbol = sym_equal;
 		current_token.lexem.id[2] = '\0';
 		read_char();
 	}
