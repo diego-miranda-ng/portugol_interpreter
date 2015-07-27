@@ -3,6 +3,213 @@
 #include <string.h>
 #include <ctype.h>
 
+// id_max_length defini o limite de caracteres que poderão existir em um id.
+/*-----------------------------------------------------------------------------------------*/
+#define id_max_length 200
+
+// tipo de token.
+/*-----------------------------------------------------------------------------------------*/
+typedef char identifier_t[id_max_length + 1];
+
+// Em symbol_t é declarada todas as constantes que serão utilizadas para definir um
+// tipo de token.
+/*-----------------------------------------------------------------------------------------*/
+typedef enum _symbol
+{
+	sym_identifier, // identificador_1 _identificador1
+	sym_integer, // 1 10 20 55 1000
+	sym_float, // 10.10 11.11
+	sym_string, // "texto" "texto texto"
+	sym_true, // verdadeiro
+	sym_false, // falso
+	sym_type_integer, // inteiro
+	sym_type_float, // decimal
+	sym_type_string, // texto
+	sym_type_boolean, // logico
+	sym_algorith, // algoritomo
+	sym_end_algorith, // fim_algoritmo
+	sym_return, // retorne
+	sym_function, // funcao
+	sym_end_function, // fim_funcao
+	sym_type, // tipo
+	sym_registry, // registro
+	sym_end_registry, // fim_registro
+	sym_const, // constante
+	sym_or, // ou
+	sym_or_exclusive, // xou
+	sym_and, // e
+	sym_not, // nao
+	sym_if, // se
+	sym_then, // entao
+	sym_else_if, // senao_se
+	sym_else, // senao
+	sym_end_if, //fim_se
+	sym_case, // caso
+	sym_be, // seja
+	sym_end_case, // fim_caso
+	sym_do, // faca
+	sym_while, // enquanto
+	sym_end_while, // fim_enquanto
+	sym_repeat, // repita
+	sym_until, // ate
+	sym_end_until, // fim_enquanto
+	sym_for, // para
+	sym_of, // de
+	sym_step, // passo
+	sym_end_for, // fim_para
+	sym_read, // leia
+	sym_write, // escreva
+	sym_clear, // escreva
+	sym_exponentiation, // ^ ou exp
+	sym_times, // *
+	sym_division, // /
+	sym_mod, // % ou mod
+	sym_plus, // +
+	sym_minus, // -
+	sym_equal, // ==
+	sym_less, // <
+	sym_less_equal, // <=
+	sym_greater, // >
+	sym_greater_equal, // >=
+	sym_allocation, // =
+	sym_not_equal, // != ou <>
+	sym_comma, // ,
+	sym_semicolon, // ;
+	sym_open_paren, // (
+	sym_close_paren, // )
+	sym_open_bracket, // [
+	sym_close_bracket, // ]
+	sym_open_key, // {
+	sym_close_key, // }
+	sym_two_points, // :
+	sym_new_line, // \n \n\r
+	sym_null, // null
+	sym_eof // eof
+} symbol_t;
+
+// O struct position_t é uma estrutura em que se armazena a posição de um token.
+/*-----------------------------------------------------------------------------------------*/
+typedef struct _position
+{
+	unsigned int line;
+	unsigned int column;
+	unsigned int index;
+} position_t;
+
+const position_t position_zero = {0,0,0};
+
+// O struct lexem_t é uma estrutura em que se armazena o id (o token em si) e o tipo
+// de token que ele está armazenando.
+/*-----------------------------------------------------------------------------------------*/
+typedef struct _lexem
+{
+	identifier_t id;
+	symbol_t symbol;
+} lexem_t;
+
+// O struct token_t é uma estrutura em que se armazena um lexem_t (que contém as
+// informações citaras acima) e a posição do token no arquivo que está sendo lido atravé
+// do struct position_t.
+/*-----------------------------------------------------------------------------------------*/
+typedef struct _token
+{
+	lexem_t lexem;
+	position_t position;
+} token_t;
+
+// Este struct está armazenando o cunjunto de palavras chaves do compilador.
+/*-----------------------------------------------------------------------------------------*/
+lexem_t keywords[] = {
+	{"inteiro", sym_type_integer},
+	{"decimal", sym_type_float},
+	{"texto", sym_type_string},
+	{"logico", sym_type_boolean},
+	{"verdadeiro", sym_true},
+	{"falso", sym_false},
+	{"algoritmo", sym_clear},
+	{"fim_algoritmo", sym_algorith},
+	{"retorne", sym_end_algorith},
+	{"funcao", sym_function},
+	{"fim_funcao", sym_end_function},
+	{"tipo", sym_type},
+	{"registro", sym_registry},
+	{"fim_registro", sym_end_registry},
+	{"ou", sym_or},
+	{"xou", sym_or_exclusive},
+	{"e", sym_and},
+	{"nao", sym_not},
+	{"se", sym_if},
+	{"entao", sym_then},
+	{"senao_se", sym_else_if},
+	{"senao", sym_else},
+	{"fim_se", sym_end_if},
+	{"caso", sym_case},
+	{"seja", sym_be},
+	{"faca", sym_do},
+	{"fim_caso", sym_end_case},
+	{"enquanto", sym_while},
+	{"fim_enquanto", sym_end_while},
+	{"repita", sym_repeat},
+	{"ate", sym_until},
+	{"fim_ate", sym_end_until},
+	{"para", sym_for},
+	{"de", sym_of},
+	{"passo", sym_step},
+	{"fim_para", sym_end_for},
+	{"leia ", sym_read},
+	{"escreva", sym_write},
+	{"limpa_tela", sym_clear},
+	{"mod", sym_mod},
+	{"exp", sym_exponentiation}
+};
+const unsigned int keywords_count = sizeof(keywords) / sizeof(lexem_t);
+
+// Este struct está armazenando o conjunto de operadores do compilador.
+/*-----------------------------------------------------------------------------------------*/
+lexem_t operators[] = {
+	{"^", sym_exponentiation},
+	{"*", sym_times},
+	{"/", sym_division},
+	{"%", sym_mod},
+	{"+", sym_plus},
+	{"-", sym_minus},
+	{"=", sym_allocation},
+	{"==", sym_equal},
+	{"<", sym_less},
+	{">", sym_greater},
+	{"<=", sym_less_equal},
+	{">=", sym_greater_equal},
+	{"!=", sym_not_equal},
+	{"<>", sym_not_equal}
+};
+const unsigned int operators_count = sizeof(operators) / sizeof(lexem_t);
+
+// Este struct está armazenando o conjunto de pontuação do compilador.
+/*-----------------------------------------------------------------------------------------*/
+lexem_t pontuation[] = {
+	{"(", sym_open_paren},
+	{")", sym_close_paren},
+	{"[", sym_open_bracket},
+	{"]", sym_close_bracket},
+	{"{", sym_open_key},
+	{"}", sym_close_key},
+	{",", sym_comma},
+	{";", sym_semicolon},
+	{":", sym_two_points}
+};
+const unsigned int pontuation_count = sizeof(pontuation) / sizeof(lexem_t);
+
+// last_token é um struct que armazena o penúltimo token lido.
+// current_token é um struct que armazena o último token lido.
+// last_char armazena o penúltimo simbolo lido.
+// current_char armazena o último simbolo lido.
+/*-----------------------------------------------------------------------------------------*/
+token_t last_token, current_token;
+char last_char, current_char;
+position_t current_position;
+
+FILE *input_file;
+
 // Esta função verifica se o atual caracter que está sendo lido é uma quebra de linha.
 // "char current_c" é o atual caractere que está sendo lido.
 // "last_c" é o caractere que foi lido antes do atual.
