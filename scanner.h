@@ -26,7 +26,7 @@ typedef enum _symbol
 	sym_type_float, // decimal
 	sym_type_string, // texto
 	sym_type_boolean, // logico
-	sym_algorith, // algoritomo
+	sym_algorith, // algoritmo
 	sym_end_algorith, // fim_algoritmo
 	sym_return, // retorne
 	sym_function, // funcao
@@ -126,9 +126,9 @@ lexem_t keywords[] = {
 	{"logico", sym_type_boolean},
 	{"verdadeiro", sym_true},
 	{"falso", sym_false},
-	{"algoritmo", sym_clear},
-	{"fim_algoritmo", sym_algorith},
-	{"retorne", sym_end_algorith},
+	{"algoritmo", sym_algorith},
+	{"fim_algoritmo", sym_end_algorith},
+	{"retorne", sym_return},
 	{"funcao", sym_function},
 	{"fim_funcao", sym_end_function},
 	{"tipo", sym_type},
@@ -531,7 +531,7 @@ bool read_token()
 // "initialize_scanner" possui a função de iniciar o analisador léxico, definindo os valores
 // iniciais das variáveis globais.
 /*-----------------------------------------------------------------------------------------*/
-int initializer_scanner(FILE *file)
+int initialize_scanner(FILE *file)
 {
 	input_file = file;
 	strcpy(current_token.lexem.id, "");
