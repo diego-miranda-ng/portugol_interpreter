@@ -75,7 +75,7 @@ entry_t *create_entry(identifier_t id, position_t position, class_t class)
 	entry_t *new_entry = (entry_t *)malloc(sizeof(entry_t));
 	if(!new_entry)
 	{
-		printf("ERRO!!"); // A memória não foi alocada.
+		printf("\n\nERRO!!\n\n"); // A memória não foi alocada.
 		return NULL;
 	}
 	strcpy(new_entry->id, id);
@@ -93,7 +93,7 @@ type_t *create_type(form_t form, value_t length, unsigned int size, entry_t *fie
 	type_t *type = (type_t *)malloc(sizeof(type_t));
 	if(!type)
 	{
-		printf("ERRO!!"); // A memória não foi alocada.
+		printf("\n\nERRO!!\n\n"); // A memória não foi alocada.
 		return NULL;
 	}
 	type->form = form;
@@ -109,13 +109,13 @@ entry_t *create_elementary_type(identifier_t id)
 	entry_t *entry = create_entry(id, position_zero, class_type);
 	if(!entry)
 	{
-		printf("ERRO!!"); // Entry não foi criado.
+		printf("\n\nERRO!!\n\n"); // Entry não foi criado.
 		return NULL;
 	}
 	type_t *type = create_type(form_atomic, 0, sizeof(value_t), NULL, NULL);
 	if(!type)
 	{
-		printf("ERRO!!"); // Type não foi criado.
+		printf("\n\nERRO!!\n\n"); // Type não foi criado.
 		free(entry);
 		return NULL;
 	}
@@ -144,7 +144,7 @@ bool add_entry(entry_t *entry, entry_t *table)
 		
 	if(find_entry(entry->id, table))
 	{
-		printf("ERRO!!"); // Identificador já cadastrado.
+		mark_at(error_parser, entry->position, "O identificador \"%s\" foi anteriormente declarado.", entry->id);
 		return false;
 	}
 
@@ -173,4 +173,20 @@ entry_t *initialize_table(address_t base_address)
 	add_entry(boolean_type, table);
 	add_entry(string_type, table);
 	return table;
+}
+
+void show_content(entry_t *table)
+{
+	if(table == NULL)
+		return;
+
+	printf("\n%s\n", table->id);
+
+	entry_t *table_aux = table;
+	while(table_aux != NULL)
+	{
+		printf("ID: %s", table_aux->id);
+		printf("\n----------------------------------------------------\n\n");
+		table_aux = table_aux->next;
+	}
 }
