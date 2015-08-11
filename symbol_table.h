@@ -14,7 +14,7 @@ typedef enum _class
 	class_var,
 	class_const,
 	class_type,
-	class_proc
+	class_function
 } class_t;
 
 // Diferencia os elementos entre tipos estruturados (Vetor e Registros).
@@ -46,6 +46,7 @@ typedef struct _entry
 	value_t value;
 	struct _type *type;
 	struct _entry *next;
+	struct _entry *parent;
 } entry_t;
 
 typedef enum _addressing
@@ -53,12 +54,10 @@ typedef enum _addressing
 	addressing_unknown,
 	addressing_direct,
 	addressing_immediate,
-	addressing_register,
+	addressing_rsegister,
 	addressing_indirect,
 	addressing_condition
 } addressing_t;
-
-entry_t *symble_table = NULL;
 
 address_t current_address;
 entry_t *integer_type;
@@ -70,7 +69,7 @@ bool clear_table(entry_t *table)
 {
 }
 
-entry_t *create_entry(identifier_t id, position_t position, class_t class)
+entry_t *create_entry(identifier_t id, position_t position, class_t class, entry_t *parent)
 {
 	entry_t *new_entry = (entry_t *)malloc(sizeof(entry_t));
 	if(!new_entry)
@@ -85,6 +84,7 @@ entry_t *create_entry(identifier_t id, position_t position, class_t class)
 	new_entry->type = NULL;
 	new_entry->value = 0;
 	new_entry->next = NULL;
+	new_entry->parent = parent;
 	return new_entry;
 }
 
@@ -106,7 +106,7 @@ type_t *create_type(form_t form, value_t length, unsigned int size, entry_t *fie
 
 entry_t *create_elementary_type(identifier_t id)
 {
-	entry_t *entry = create_entry(id, position_zero, class_type);
+	entry_t *entry = create_entry(id, position_zero, class_type, NULL);
 	if(!entry)
 	{
 		printf("\n\nERRO!!\n\n"); // Entry não foi criado.
@@ -128,12 +128,16 @@ entry_t *find_entry(identifier_t id, entry_t *table)
 	if(table == NULL)
 		return NULL;
 	entry_t *table_aux = table;
-	while(table_aux != NULL)
+	do
 	{
 		if(!strcmp(table_aux->id, id))
 			break;
-		table_aux = table_aux->next;
+		if(table_aux->next == NULL && table_aux->parent != NULL)
+			table_aux = table_aux->parent;
+		else
+			table_aux = table_aux->next;
 	}
+	while(table_aux != NULL);
 	return table_aux;
 }
 
@@ -183,9 +187,22 @@ void show_content(entry_t *table)
 	printf("\n%s\n", table->id);
 
 	entry_t *table_aux = table;
+	type_t *type = NULL;
 	while(table_aux != NULL)
 	{
-		printf("ID: %s", table_aux->id);
+		type = table_aux->type;
+		printf("ID: %s\n", table_aux->id);
+		while(type != NULL)
+		{
+			if(type->form == 0)
+				printf("Atomic\n");
+			else if(type->form == 1)
+				printf("Array\n");
+			else if(type->form == 2)
+				printf("Record\n");
+			printf("Length: %d\n", type->length);
+			type = type->base;
+		}
 		printf("\n----------------------------------------------------\n\n");
 		table_aux = table_aux->next;
 	}
