@@ -112,7 +112,10 @@ entry_t *var_declaration(entry_t *parent)
 				add_entry(var(parent), entry);
 		}
 		else
-			mark(error_warning, "Esta variável já foi declarada anteriormente.");
+		{
+			mark(error_warning, "\"%s\" já foi declarada anteriormente.", current_token.lexem.id);
+			var(NULL);
+		}
 	}
 	while(try_consume(sym_comma));
 	consume(sym_two_points);
@@ -167,6 +170,25 @@ entry_t *parameters(entry_t *parent)
 	return table;
 }
 
+// expressão_simples = [ “+” | “-” ] termo { ( “+” | “-” | “ou” ) termo }.
+void simple_expression()
+{
+}
+
+// expressão = expressão_simples { ( “<” | “>” | “<=” | “>=” | “==” ) expressão_simples}.
+void expression()
+{
+	simple_expression();
+}
+
+// declaração_constante = “constante” identificador “=” expressão.
+void const_declaration(entry_t *parent)
+{
+	consume(sym_const);
+	consume(sym_identifier);
+	expression();
+}
+
 void declarations(entry_t *parent)
 {
 	consume_new_line();
@@ -176,7 +198,12 @@ void declarations(entry_t *parent)
 // bloco =  { ( chamada_função | atribuição | declarações | retorno | se | enquanto | para | faça | caso | repita | até ) “⏎” }.
 void block()
 {
-	declarations(symbol_table->parent);
+	consume_new_line();
+	if(current_token.lexem.symbol == sym_identifier)
+	{
+		declarations(symbol_table->parent);
+		consume(sym_new_line);
+	}
 }
 
 // declaração_função = “funcao” identificador [ parâmetros ] [ “:” identificador ] “⏎” bloco “fim_funcao” “⏎”.
@@ -186,27 +213,31 @@ void function_declaration()
 	consume(sym_function);
 	if(assert(sym_identifier))
 	{
-		entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_function, symbol_table->parent);
-		add_entry(new_entry, symbol_table);
-		scan();
-		if(try_assert(sym_open_paren))
-			symbol_table = parameters(symbol_table);
-		if(try_consume(sym_two_points))
+		if(!find_entry(current_token.lexem.id, symbol_table))
 		{
-			if(!assert(sym_identifier))
-				return;
-			if(find_entry(current_token.lexem.id, symbol_table))
+			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_function, symbol_table->parent);
+			add_entry(new_entry, symbol_table);
+			scan();
+			if(try_assert(sym_open_paren))
+				symbol_table = parameters(symbol_table);
+			if(try_consume(sym_two_points))
 			{
-				scan();
-				if(!consume(sym_new_line))
+				if(!assert(sym_identifier))
 					return;
-				block();
-				consume(sym_end_function);
+				if(find_entry(current_token.lexem.id, symbol_table))
+				{
+					scan();
+					consume(sym_new_line);
+					block();
+					consume(sym_end_function);
+				}
+				else
+					mark(error_warning, "O tipo \"%s\" é inválido para a declaração de funções.", current_token.lexem.id);
 			}
-			else
-				mark(error_warning, "O tipo \"%s\" é inválido para a declaração de funções.", current_token.lexem.id);
+			symbol_table = symbol_table->next->parent;
 		}
-		symbol_table = symbol_table->next->parent;
+		else
+			mark(error_warning, "\"%s\" já foi declarada anteriormente.", current_token.lexem.id);
 	}
 }
 
@@ -225,6 +256,7 @@ void program()
 			function_declaration();
 		consume(sym_new_line);
 	}
+	consume(sym_end_algorith);
 }
 
 bool initialize_parser(FILE *file)
