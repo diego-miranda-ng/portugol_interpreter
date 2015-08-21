@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-entry_t *symbol_table;
+symbol_table_t *symbol_table;
 
 bool is_first(char non_terminal[], symbol_t sym)
 {
@@ -30,7 +30,16 @@ bool verify(symbol_t sym, bool mark_error, bool next)
 		return true;
 	}
 	if(mark_error)
-		mark(error_log, "\"%s\" encontrado.", current_token.lexem.id);
+	{
+		if(sym == sym_identifier)
+			mark(error_log, "Era esperado um identificador mas foi encontrado \"%s\".", current_token.lexem.id);
+		else if(sym == sym_integer)
+			mark(error_log, "Era esperado um inteiro mas foi encontrado \"%s\".", current_token.lexem.id);
+		else if(sym == sym_new_line)
+			mark(error_log, "Era esperado uma quebra de linha mas foi encontrado \"%s\".", current_token.lexem.id);
+		else
+			mark(error_log, "Era esperado \"%s\" mas foi encontrado \"%s\".", find_symbol(sym), current_token.lexem.id);
+	}
 	return false;
 }
 
@@ -60,10 +69,10 @@ bool try_assert(symbol_t sym)
 }
 
 // variável = identificador { “[“ inteiro “]” }.
-entry_t *var(entry_t *parent)
+entry_t *var()
 {
 	entry_t *table;
-	entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_var, parent);
+	entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_var);
 	scan();
 	type_t *type = NULL;
 	type_t *aux_type = NULL;
@@ -95,8 +104,9 @@ entry_t *var(entry_t *parent)
 }
 
 // declaração_variável = variável { “,” variável } “:” identificador.
-entry_t *var_declaration(entry_t *parent)
+void var_declaration()
 {
+	consume_new_line();
 	entry_t *table = NULL;
 	entry_t *entry = NULL;
 	do
@@ -105,94 +115,275 @@ entry_t *var_declaration(entry_t *parent)
 		{
 			if(table == NULL)
 			{
-				table = var(parent);
+				table = var();
 				entry = table;
 			}
 			else
-				add_entry(var(parent), entry);
+			{
+				entry->next = var();
+				entry = entry->next;
+			}
 		}
 		else
-		{
-			mark(error_warning, "\"%s\" já foi declarada anteriormente.", current_token.lexem.id);
-			var(NULL);
-		}
+			mark(error_warning, "O identificador \"%s\" já foi declarada anteriormente.", current_token.lexem.id);
 	}
 	while(try_consume(sym_comma));
 	consume(sym_two_points);
 	if(assert(sym_identifier))
 	{
 		entry = find_entry(current_token.lexem.id, symbol_table);
-		type_t *type = entry->type;
-		if(entry != NULL && (type->form == form_atomic || type->form == form_record))
+		if(entry != NULL)
 		{
-			entry_t *entry_aux = table;
-			type_t *type_aux;
-			while(entry_aux != NULL)
+			type_t *type = entry->type;
+			if(entry != NULL && (type->form == form_atomic || type->form == form_record))
 			{
-				type_aux = entry_aux->type;
-				if(type_aux != NULL)
+				entry_t *entry_aux = table;
+				type_t *type_aux;
+				while(entry_aux != NULL)
 				{
-					while(type_aux->base != NULL)
-						type_aux = type_aux->base;
-					type_aux->base = type;
+					type_aux = entry_aux->type;
+					if(type_aux != NULL)
+					{
+						while(type_aux->base != NULL)
+							type_aux = type_aux->base;
+						type_aux->base = type;
+					}
+					else
+						entry_aux->type = type;
+					entry_aux = entry_aux->next;
 				}
-				else
-					entry_aux->type = type;
-				entry_aux = entry_aux->next;
 			}
+			else
+				mark(error_fatal,"Este tipo de variável não é válido");
+			scan();
+			add_entry(table, symbol_table);
 		}
 		else
-			mark(error_fatal,"Este tipo de variável não é válido");
+		{
+			mark(error_fatal, "Era esperado um tipo de variável mas foi encontrado \"%s\".", current_token.lexem.id);
+		}
 	}
-	scan();
-	// add_entry(table, symbol_table);
-	return table;
 }
 
 // parâmetros = “(“ declaração_variável { “;” declaração_variável } “)”.
-entry_t *parameters(entry_t *parent)
+void parameters()
 {
 	consume(sym_open_paren);
-	entry_t *table = NULL;
-	entry_t *entry = NULL;
 	do
 	{
-		if(table == NULL)
-		{
-			table = var_declaration(parent);
-			entry = table;
-		}
-		else
-			add_entry(var_declaration(parent), entry);
+		var_declaration();
 	}
 	while(try_consume(sym_semicolon));
 	consume(sym_close_paren);
-	return table;
+}
+
+void expression();
+
+// argumentos = “(“ [ expressão { “,” expressão } ] “)”.
+void arguments()
+{
+	consume(sym_open_paren);	
+	if(try_assert(sym_identifier)
+	|| try_assert(sym_float)
+	|| try_assert(sym_string)
+	|| try_assert(sym_integer)
+	|| try_assert(sym_open_paren)
+	|| try_assert(sym_not))
+	{
+		do
+		{
+			expression();
+		}
+		while(try_consume(sym_comma));
+	}
+	consume(sym_close_paren);
+}
+
+// chamada_função = identificador argumentos.
+void function_call()
+{
+	consume(sym_identifier);
+	arguments();
+}
+
+// seletor = { “.” identificador | “[“ expressão “]” }.
+void selector()
+{
+	if(try_consume(sym_dot))
+		consume(sym_identifier);
+	else if(try_consume(sym_open_bracket))
+	{
+		expression();
+		consume(sym_close_bracket);
+	}
+}
+
+// fator = texto | inteiro | decimal | chamada_função | identificador seletor | “(“ expressão “)” | “nao” fator.
+void factor()
+{
+	if(try_assert(sym_identifier))
+	{
+		entry_t *entry = find_entry(current_token.lexem.id, symbol_table);
+		if(entry != NULL)
+		{
+			if(entry->class == class_var || entry->class == class_const || entry->class == class_function)
+			{
+				if(entry->class == class_function)
+				{
+					function_call();
+				}
+				else
+				{
+					scan();
+					selector();
+				}
+			}
+			else
+			{
+				mark(error_parser, "\"%s\" não é um fator válido válido.", current_token.lexem.id);
+				scan();
+			}
+		}
+		else
+		{
+			mark(error_parser, "\"%s\" não foi declarado anteriormente.", current_token.lexem.id);
+			scan();
+		}
+	}
+	else if(try_consume(sym_open_paren))
+	{
+		expression();
+		consume(sym_close_paren);
+	}
+	else if(try_consume(sym_not))
+	{
+		factor();
+		return;
+	}
+	else if(try_consume(sym_string) || try_consume(sym_integer) || try_consume(sym_float))
+		return;
+	else
+		mark(error_parser, "Fator perdido.");
+}
+
+// termo = fator { ( “*” | “/” | “e” ) fator }.
+void term()
+{
+	factor();
+	while(try_consume(sym_times) || try_consume(sym_division) || try_consume(sym_and))
+		factor();
 }
 
 // expressão_simples = [ “+” | “-” ] termo { ( “+” | “-” | “ou” ) termo }.
 void simple_expression()
 {
+	if(strcmp(current_token.lexem.id, "+"))
+		try_consume(sym_plus);
+	else if(strcmp(current_token.lexem.id, "+"))
+		try_consume(sym_minus);
+	term();
+	while(try_consume(sym_plus) || try_consume(sym_minus))
+		term();
 }
 
 // expressão = expressão_simples { ( “<” | “>” | “<=” | “>=” | “==” ) expressão_simples}.
 void expression()
 {
 	simple_expression();
+	while(try_consume(sym_less) || try_consume(sym_greater) || try_consume(sym_less_equal) || try_consume(sym_greater_equal) ||	try_consume(sym_equal))
+		simple_expression();
+}
+
+// declaração_tipo = “tipo” identificador “=” ( identificador | “registro” “⏎” { declaração_variável “⏎” } “fim_registro” ).
+void type_declaration()
+{
+	consume_new_line();
+	consume(sym_type);
+	if(assert(sym_identifier))
+	{
+		entry_t *entry = NULL;
+		entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_unknown);
+		scan();
+		consume(sym_allocation);
+		if(try_assert(sym_identifier))
+		{
+			entry = find_entry(current_token.lexem.id, symbol_table);
+			if(entry != NULL)
+				new_entry->type = entry->type;
+			else
+				mark(error_parser, "O identificador \"%s\" não foi declarado.", current_token.lexem.id);
+			scan();
+		}
+		else if(try_assert(sym_registry))
+		{
+			scan();
+			consume(sym_new_line);
+			unsigned int size = 0;
+			if(try_assert(sym_identifier))
+			{
+				symbol_table = create_table(symbol_table);
+				do
+				{
+					var_declaration();
+					consume(sym_new_line);
+				}
+				while(try_assert(sym_identifier));
+				entry = symbol_table->entry;
+				if(entry != NULL)
+				{
+					entry_t *e = entry;
+					while (e != NULL && e->type != NULL)
+					{
+						size += e->type->size;
+						e = e->next;
+					}
+				}
+				symbol_table->parent->childrens = symbol_table;
+				symbol_table = symbol_table->parent;
+			}
+			consume(sym_end_registry);
+			new_entry->type = create_type(form_record, 0, size, entry, NULL);
+		}
+		else
+			mark(error_fatal, "Durante a adeclaração de um tipo era esperado um identificador ou a palavra-chave registro mas foi encontrado \"%s\".", current_token.lexem.id);
+		consume(sym_new_line);
+	}
+	else
+		mark(error_fatal, "\"%s\" é inválido como identificador de uma função.", current_token.lexem.id);
 }
 
 // declaração_constante = “constante” identificador “=” expressão.
-void const_declaration(entry_t *parent)
-{
-	consume(sym_const);
-	consume(sym_identifier);
-	expression();
-}
-
-void declarations(entry_t *parent)
+void const_declaration()
 {
 	consume_new_line();
-	add_entry(var_declaration(parent), symbol_table);
+	consume(sym_const);
+	if(assert(sym_identifier))
+	{
+		if(find_entry(current_token.lexem.id, symbol_table) == NULL)
+		{
+			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_const);
+			add_entry(new_entry, symbol_table);
+			consume(sym_identifier);
+			consume(sym_allocation);
+			expression();
+		}
+		else
+			mark(error_warning, "O identificador \"%s\" já foi declarado anteriormente.", current_token.lexem.id);
+	}
+	else
+		mark(error_fatal, "O identificador \"%s\" é inválido.", current_token.lexem.id);
+}
+
+// declarações =  declaração_tipo | declaração_constante | declaração_variável.
+void declarations()
+{
+	consume_new_line();
+	if(try_assert(sym_identifier))
+		var_declaration();
+	else if(try_assert(sym_const))
+		const_declaration();
+	else if(try_assert(sym_type))
+		type_declaration();
 }
 
 // bloco =  { ( chamada_função | atribuição | declarações | retorno | se | enquanto | para | faça | caso | repita | até ) “⏎” }.
@@ -201,7 +392,7 @@ void block()
 	consume_new_line();
 	if(current_token.lexem.symbol == sym_identifier)
 	{
-		declarations(symbol_table->parent);
+		declarations();
 		consume(sym_new_line);
 	}
 }
@@ -213,32 +404,38 @@ void function_declaration()
 	consume(sym_function);
 	if(assert(sym_identifier))
 	{
-		if(!find_entry(current_token.lexem.id, symbol_table))
+		if(find_entry(current_token.lexem.id, symbol_table) == NULL)
 		{
-			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_function, symbol_table->parent);
+			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_function);
 			add_entry(new_entry, symbol_table);
 			scan();
+			symbol_table = create_table(symbol_table);
 			if(try_assert(sym_open_paren))
-				symbol_table = parameters(symbol_table);
+				parameters();
 			if(try_consume(sym_two_points))
 			{
 				if(!assert(sym_identifier))
-					return;
-				if(find_entry(current_token.lexem.id, symbol_table))
+					mark(error_fatal, "Era esperado um tipo de dados mas foi encontrado \"%s\"", current_token.lexem.id);
+				entry_t *entry = find_entry(current_token.lexem.id, symbol_table);
+				if(entry != NULL)
 				{
+					new_entry->type = entry->type;
 					scan();
-					consume(sym_new_line);
-					block();
-					consume(sym_end_function);
 				}
 				else
-					mark(error_warning, "O tipo \"%s\" é inválido para a declaração de funções.", current_token.lexem.id);
+					mark(error_fatal, "\"%s\" não é um tipo válido.", current_token.lexem.id);
 			}
-			symbol_table = symbol_table->next->parent;
+			consume(sym_new_line);
+			block();
+			symbol_table->parent->childrens = symbol_table;
+			symbol_table = symbol_table->parent;
 		}
 		else
-			mark(error_warning, "\"%s\" já foi declarada anteriormente.", current_token.lexem.id);
+			mark(error_fatal, "O identificador \"%s\" já foi declarada anteriormente.", current_token.lexem.id);
 	}
+	else
+		mark(error_fatal, "\"%s\" é inválido como identificador de uma função.", current_token.lexem.id);
+	consume(sym_end_function);
 }
 
 // programa = “algoritmo” identificador “⏎” { declaração_função } bloco “fim_algoritmo”.
@@ -248,20 +445,22 @@ void program()
 	consume(sym_algorith);
 	consume(sym_identifier);
 	consume(sym_new_line);
-	while(try_assert(sym_identifier) || try_assert(sym_function))
+	consume_new_line();
+	while(try_assert(sym_identifier) || try_assert(sym_function) || try_assert(sym_const) || try_assert(sym_type))
 	{
-		if(try_assert(sym_identifier))
-			declarations(NULL);
+		if(try_assert(sym_identifier) || try_assert(sym_const) || try_assert(sym_type))
+			declarations();
 		else if(try_assert(sym_function))
 			function_declaration();
 		consume(sym_new_line);
+		consume_new_line();
 	}
 	consume(sym_end_algorith);
 }
 
 bool initialize_parser(FILE *file)
 {
-	symbol_table = initialize_table(0);
+	symbol_table = initialize_table();
 	if(symbol_table == NULL)
 		return false;
 
