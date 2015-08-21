@@ -22,10 +22,6 @@ typedef enum _symbol
 	sym_string, // "texto" "texto texto"
 	sym_true, // verdadeiro
 	sym_false, // falso
-	sym_type_integer, // inteiro
-	sym_type_float, // decimal
-	sym_type_string, // texto
-	sym_type_boolean, // logico
 	sym_algorith, // algoritmo
 	sym_end_algorith, // fim_algoritmo
 	sym_return, // retorne
@@ -74,6 +70,7 @@ typedef enum _symbol
 	sym_allocation, // =
 	sym_not_equal, // != ou <>
 	sym_comma, // ,
+	sym_dot, // .
 	sym_semicolon, // ;
 	sym_open_paren, // (
 	sym_close_paren, // )
@@ -120,10 +117,6 @@ typedef struct _token
 // Este struct está armazenando o cunjunto de palavras chaves do compilador.
 /*-----------------------------------------------------------------------------------------*/
 lexem_t keywords[] = {
-	{"inteiro", sym_type_integer},
-	{"decimal", sym_type_float},
-	{"texto", sym_type_string},
-	{"logico", sym_type_boolean},
 	{"verdadeiro", sym_true},
 	{"falso", sym_false},
 	{"algoritmo", sym_algorith},
@@ -134,6 +127,7 @@ lexem_t keywords[] = {
 	{"tipo", sym_type},
 	{"registro", sym_registry},
 	{"fim_registro", sym_end_registry},
+	{"constante", sym_const},
 	{"ou", sym_or},
 	{"xou", sym_or_exclusive},
 	{"e", sym_and},
@@ -194,6 +188,7 @@ lexem_t pontuation[] = {
 	{"{", sym_open_key},
 	{"}", sym_close_key},
 	{",", sym_comma},
+	{".", sym_dot},
 	{";", sym_semicolon},
 	{":", sym_two_points}
 };
@@ -265,12 +260,35 @@ bool is_keyword(char id[], symbol_t *symbol)
 	return false;
 }
 
+
+char *find_symbol(symbol_t symbol)
+{
+	int i = 0;
+	for(i = 0; i < keywords_count; i++)
+	{
+		if(symbol == keywords[i].symbol)
+			return keywords[i].id;
+	}
+	for(i = 0; i < operators_count; i++)
+	{
+		if(symbol == operators[i].symbol)
+			return operators[i].id;
+	}
+	for(i = 0; i < pontuation_count; i++)
+	{
+		if(symbol == pontuation[i].symbol)
+			return pontuation[i].id;
+	}
+	return NULL;
+}
+
 // Esta função verifica se a sequencia de caracteres que está sendo lida pelo arquivo
 // passado como parâmetro na função inicializer_scanner() é um identificador.
 /*-----------------------------------------------------------------------------------------*/
 bool identifier()
 {
 	int i = 0, count = 0, size;
+	current_token.position = current_position;
 	while(i < id_max_length && !isspace(current_char) && (isalpha(current_char) || isdigit(current_char) || current_char == '_'))
 	{
 		current_token.lexem.id[i] = current_char;
@@ -291,6 +309,7 @@ bool identifier()
 bool number()
 {
 	int i = 0;
+	current_token.position = current_position;
 	while(i < id_max_length && (isdigit(current_char)))
 	{
 		current_token.lexem.id[i] = current_char;
@@ -347,6 +366,7 @@ bool number()
 bool string()
 {
 	int i = 0;
+	current_token.position = current_position;
 	while(i < id_max_length)
 	{
 		current_token.lexem.id[i] = current_char;
@@ -538,7 +558,7 @@ int initialize_scanner(FILE *file)
 	current_token.position.line = 0;
 	current_token.position.column = 0;
 	current_token.position.index = 0;
-	current_position.line = 0;
+	current_position.line = 1;
 	current_position.column = 0;
 	current_position.index = 0;
 	current_char = '\0';
