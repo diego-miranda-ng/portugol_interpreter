@@ -27,6 +27,7 @@ typedef enum _symbol
 	sym_return, // retorne
 	sym_function, // funcao
 	sym_end_function, // fim_funcao
+	sym_var, // variavel
 	sym_type, // tipo
 	sym_registry, // registro
 	sym_end_registry, // fim_registro
@@ -45,9 +46,11 @@ typedef enum _symbol
 	sym_end_case, // fim_caso
 	sym_do, // faca
 	sym_while, // enquanto
+	sym_whenever, // enquanto_que
 	sym_end_while, // fim_enquanto
 	sym_repeat, // repita
 	sym_until, // ate
+	sym_until2, // ate_que
 	sym_end_until, // fim_enquanto
 	sym_for, // para
 	sym_of, // de
@@ -124,6 +127,7 @@ lexem_t keywords[] = {
 	{"retorne", sym_return},
 	{"funcao", sym_function},
 	{"fim_funcao", sym_end_function},
+	{"variavel", sym_var},
 	{"tipo", sym_type},
 	{"registro", sym_registry},
 	{"fim_registro", sym_end_registry},
@@ -142,9 +146,11 @@ lexem_t keywords[] = {
 	{"faca", sym_do},
 	{"fim_caso", sym_end_case},
 	{"enquanto", sym_while},
+	{"sempre_que", sym_whenever},
 	{"fim_enquanto", sym_end_while},
 	{"repita", sym_repeat},
 	{"ate", sym_until},
+	{"ate_que", sym_until2},
 	{"fim_ate", sym_end_until},
 	{"para", sym_for},
 	{"de", sym_of},
@@ -505,6 +511,9 @@ bool read_token()
 			break;
 		case '}':
 			current_token.lexem.symbol = sym_close_key;
+			break;
+		case '.':
+			current_token.lexem.symbol = sym_dot;
 			break;
 		default:
 			current_token.lexem.symbol = sym_null;
