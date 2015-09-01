@@ -48,11 +48,6 @@ bool try_consume(symbol_t sym)
 	return verify(sym, false, true);
 }
 
-void consume_new_line()
-{
-	while(try_consume(sym_new_line));
-}
-
 bool consume(symbol_t sym)
 {
 	return verify(sym, true, true);
@@ -67,6 +62,18 @@ bool try_assert(symbol_t sym)
 {
 	return verify(sym, false, false);
 }
+
+void consume_new_line()
+{
+	while(try_consume(sym_new_line));
+}
+
+void consume_until(symbol_t sym)
+{
+	while(!try_consume(sym) && current_token.lexem.symbol != sym_eof);
+}
+
+void block();
 
 // variável = identificador { “[“ inteiro “]” }.
 entry_t *var()
@@ -104,14 +111,13 @@ entry_t *var()
 }
 
 // declaração_variável = variável { “,” variável } “:” identificador.
-void var_declaration()
+void var_declaration(bool search_parent)
 {
-	consume_new_line();
 	entry_t *table = NULL;
 	entry_t *entry = NULL;
 	do
 	{
-		if(!find_entry(current_token.lexem.id, symbol_table))
+		if(find_entry(current_token.lexem.id, symbol_table, search_parent) == NULL)
 		{
 			if(table == NULL)
 			{
@@ -125,13 +131,13 @@ void var_declaration()
 			}
 		}
 		else
-			mark(error_warning, "O identificador \"%s\" já foi declarada anteriormente.", current_token.lexem.id);
+			mark(error_fatal, "O identificador \"%s\" já foi declarado anteriormente.", current_token.lexem.id);
 	}
 	while(try_consume(sym_comma));
 	consume(sym_two_points);
 	if(assert(sym_identifier))
 	{
-		entry = find_entry(current_token.lexem.id, symbol_table);
+		entry = find_entry(current_token.lexem.id, symbol_table, true);
 		if(entry != NULL)
 		{
 			type_t *type = entry->type;
@@ -171,7 +177,7 @@ void parameters()
 	consume(sym_open_paren);
 	do
 	{
-		var_declaration();
+		var_declaration(true);
 	}
 	while(try_consume(sym_semicolon));
 	consume(sym_close_paren);
@@ -207,14 +213,40 @@ void function_call()
 }
 
 // seletor = { “.” identificador | “[“ expressão “]” }.
-void selector()
+void selector(entry_t *entry)
 {
 	if(try_consume(sym_dot))
-		consume(sym_identifier);
+	{
+		if(assert(sym_identifier))
+		{
+			if(find_field(current_token.lexem.id, entry) != NULL)
+				consume(sym_identifier);
+			else
+				mark(error_fatal, "O identificador \"%s\" não foi declarado como um campo de \"%s\"",current_token.lexem.id, entry->id);
+		}
+		else
+			mark(error_fatal, "\"%s\" não é um identificador válido.", current_token.lexem.id);
+	}
 	else if(try_consume(sym_open_bracket))
 	{
 		expression();
 		consume(sym_close_bracket);
+	}
+}
+
+// atribuição = identificador seletor “=” expressão.
+void allocarion()
+{
+	if(assert(sym_identifier))
+	{
+		entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
+		if(entry != NULL)
+		{
+			consume(sym_identifier);
+			selector(entry);
+			consume(sym_allocation);
+			expression();
+		}
 	}
 }
 
@@ -223,32 +255,29 @@ void factor()
 {
 	if(try_assert(sym_identifier))
 	{
-		entry_t *entry = find_entry(current_token.lexem.id, symbol_table);
+		entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
 		if(entry != NULL)
 		{
-			if(entry->class == class_var || entry->class == class_const || entry->class == class_function)
+			long size = sizeof(char)*strlen(entry->id);
+			long position = ftell(input_file) - size;
+			consume(sym_identifier);
+			position -= ftell(input_file);
+			position--;
+			if(try_assert(sym_open_paren))
 			{
-				if(entry->class == class_function)
-				{
-					function_call();
-				}
-				else
-				{
-					scan();
-					selector();
-				}
+				fseek(input_file, position, SEEK_CUR);
+				strcpy(current_token.lexem.id, "");
+				read_char();
+				read_token();
+				function_call();
 			}
 			else
 			{
-				mark(error_parser, "\"%s\" não é um fator válido válido.", current_token.lexem.id);
-				scan();
+				selector(entry);
 			}
 		}
 		else
-		{
 			mark(error_parser, "\"%s\" não foi declarado anteriormente.", current_token.lexem.id);
-			scan();
-		}
 	}
 	else if(try_consume(sym_open_paren))
 	{
@@ -301,52 +330,62 @@ void type_declaration()
 	consume(sym_type);
 	if(assert(sym_identifier))
 	{
-		entry_t *entry = NULL;
-		entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_unknown);
-		scan();
-		consume(sym_allocation);
-		if(try_assert(sym_identifier))
+		if(find_entry(current_token.lexem.id, symbol_table, true) == NULL)
 		{
-			entry = find_entry(current_token.lexem.id, symbol_table);
-			if(entry != NULL)
-				new_entry->type = entry->type;
-			else
-				mark(error_parser, "O identificador \"%s\" não foi declarado.", current_token.lexem.id);
+			entry_t *entry = NULL;
+			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_unknown);
 			scan();
-		}
-		else if(try_assert(sym_registry))
-		{
-			scan();
-			consume(sym_new_line);
-			unsigned int size = 0;
+			consume(sym_allocation);
 			if(try_assert(sym_identifier))
 			{
-				symbol_table = create_table(symbol_table);
-				do
-				{
-					var_declaration();
-					consume(sym_new_line);
-				}
-				while(try_assert(sym_identifier));
-				entry = symbol_table->entry;
+				entry = find_entry(current_token.lexem.id, symbol_table, true);
+				new_entry->class = class_type;
 				if(entry != NULL)
-				{
-					entry_t *e = entry;
-					while (e != NULL && e->type != NULL)
-					{
-						size += e->type->size;
-						e = e->next;
-					}
-				}
-				symbol_table->parent->childrens = symbol_table;
-				symbol_table = symbol_table->parent;
+					new_entry->type = entry->type;
+				else
+					mark(error_parser, "O identificador \"%s\" não foi declarado.", current_token.lexem.id);
+				scan();
 			}
-			consume(sym_end_registry);
-			new_entry->type = create_type(form_record, 0, size, entry, NULL);
+			else if(try_assert(sym_registry))
+			{
+				scan();
+				consume(sym_new_line);
+				unsigned int size = 0;
+				new_entry->class = class_var;
+				if(try_assert(sym_identifier))
+				{
+					symbol_table = create_table(symbol_table);
+					do
+					{
+						var_declaration(false);
+						consume(sym_new_line);
+					}
+					while(try_assert(sym_identifier));
+					entry = symbol_table->entry;
+					if(entry != NULL)
+					{
+						entry_t *e = entry;
+						while (e != NULL && e->type != NULL)
+						{
+							size += e->type->size;
+							e = e->next;
+						}
+					}
+					new_entry->children = symbol_table;
+					symbol_table = symbol_table->parent;
+					free(new_entry->children);
+					new_entry->children = NULL;
+				}
+				consume(sym_end_registry);
+				new_entry->type = create_type(form_record, 0, size, entry, NULL);
+			}
+			else
+				mark(error_fatal, "Durante a adeclaração de um tipo era esperado um identificador ou a palavra-chave registro mas foi encontrado \"%s\".", current_token.lexem.id);
+			add_entry(new_entry, symbol_table);
+			consume(sym_new_line);
 		}
 		else
-			mark(error_fatal, "Durante a adeclaração de um tipo era esperado um identificador ou a palavra-chave registro mas foi encontrado \"%s\".", current_token.lexem.id);
-		consume(sym_new_line);
+			mark(error_parser, "O identificador \"%s\" não foi declarado.", current_token.lexem.id);
 	}
 	else
 		mark(error_fatal, "\"%s\" é inválido como identificador de uma função.", current_token.lexem.id);
@@ -359,7 +398,7 @@ void const_declaration()
 	consume(sym_const);
 	if(assert(sym_identifier))
 	{
-		if(find_entry(current_token.lexem.id, symbol_table) == NULL)
+		if(find_entry(current_token.lexem.id, symbol_table, true) == NULL)
 		{
 			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_const);
 			add_entry(new_entry, symbol_table);
@@ -378,22 +417,261 @@ void const_declaration()
 void declarations()
 {
 	consume_new_line();
-	if(try_assert(sym_identifier))
-		var_declaration();
+	if(try_consume(sym_var))
+	{
+		if(assert(sym_identifier))
+			var_declaration(true);
+	}
 	else if(try_assert(sym_const))
 		const_declaration();
 	else if(try_assert(sym_type))
 		type_declaration();
 }
 
+// se = “se” expressão “entao” “⏎” bloco { “senao_se” expressão “entao” “⏎” bloco } [ “senao” “⏎” bloco ] “fim_se”.
+void stmt_if()
+{
+	consume_new_line();
+	consume(sym_if);
+	expression();
+	consume(sym_then);
+	consume(sym_new_line);
+	entry_t *new_entry = create_entry("se", current_token.position, class_unknown);
+	symbol_table = create_table(symbol_table);
+	new_entry->children = symbol_table;
+	block();
+	symbol_table = symbol_table->parent;
+	add_entry(new_entry, symbol_table);
+	while(try_consume(sym_else_if))
+	{
+		expression();
+		consume(sym_then);
+		consume(sym_new_line);
+		new_entry = create_entry("se", current_token.position, class_unknown);
+		symbol_table = create_table(symbol_table);
+		new_entry->children = symbol_table;
+		block();
+		symbol_table = symbol_table->parent;
+		add_entry(new_entry, symbol_table);
+	}
+	if(try_consume(sym_else))
+	{
+		consume(sym_new_line);
+		new_entry = create_entry("se", current_token.position, class_unknown);
+		symbol_table = create_table(symbol_table);
+		new_entry->children = symbol_table;
+		block();
+		symbol_table = symbol_table->parent;
+		add_entry(new_entry, symbol_table);
+	}
+	consume(sym_end_if);
+}
+
+// caso =  “caso” expressão “⏎” “seja” expressão “:” “⏎” bloco { “seja” expressão “:” “⏎” bloco } [ “senao” “:” “⏎” bloco ] “fim_caso”.
+void stmt_case()
+{
+	consume_new_line();
+	entry_t *new_entry;
+	consume(sym_case);
+	expression();
+	consume(sym_new_line);
+	consume(sym_be);
+	do
+	{
+		expression();
+		consume(sym_two_points);
+		consume(sym_new_line);
+		new_entry = create_entry("caso", current_token.position, class_unknown);
+		symbol_table = create_table(symbol_table);
+		new_entry->children = symbol_table;
+		block();
+		symbol_table = symbol_table->parent;
+		add_entry(new_entry, symbol_table);
+	}
+	while(try_consume(sym_be));
+	if(try_consume(sym_else))
+	{
+		consume(sym_two_points);
+		consume(sym_new_line);
+		new_entry = create_entry("caso", current_token.position, class_unknown);
+		symbol_table = create_table(symbol_table);
+		new_entry->children = symbol_table;
+		block();
+		symbol_table = symbol_table->parent;
+		add_entry(new_entry, symbol_table);
+	}
+	consume(sym_end_case);
+}
+
+// para = “para” identificador seletor “de” expressão “ate” expressão [ “passo” expressão ] “faca” “⏎” bloco “fim_para”.
+void stmt_for()
+{
+	consume(sym_for);
+	if(assert(sym_identifier))
+	{
+		entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
+		consume(sym_identifier);
+		selector(entry);
+		consume(sym_of);
+		expression();
+		consume(sym_until);
+		expression();
+		if(try_consume(sym_step))
+			expression();
+		consume(sym_do);
+		consume(sym_new_line);
+		entry_t *new_entry = create_entry("para", current_token.position, class_unknown);
+		symbol_table = create_table(symbol_table);
+		new_entry->children = symbol_table;
+		block();
+		symbol_table = symbol_table->parent;
+		add_entry(new_entry, symbol_table);
+		consume(sym_end_for);
+	}
+}
+
+// faça = “faca” “⏎” bloco “sempre_que” expressão.
+void stmt_do()
+{
+	consume(sym_do);
+	consume(sym_new_line);
+	entry_t *new_entry = create_entry("faca", current_token.position, class_unknown);
+	symbol_table = create_table(symbol_table);
+	new_entry->children = symbol_table;
+	block();
+	symbol_table = symbol_table->parent;
+	add_entry(new_entry, symbol_table);
+	consume(sym_whenever);
+	expression();
+}
+
+// enquanto = “enquanto” expressão “faca” “⏎” bloco “fim_enquanto”.
+void stmt_while()
+{
+	consume(sym_while);
+	expression();
+	consume(sym_do);
+	consume(sym_new_line);
+	entry_t *new_entry = create_entry("enquanto", current_token.position, class_unknown);
+	symbol_table = create_table(symbol_table);
+	new_entry->children = symbol_table;
+	block();
+	symbol_table = symbol_table->parent;
+	add_entry(new_entry, symbol_table);
+	consume(sym_end_while);
+}
+
+// repita = “repita” “⏎” bloco “ate_que” expressão.
+void stmt_repeat()
+{
+	consume(sym_repeat);
+	consume(sym_new_line);
+	entry_t *new_entry = create_entry("repita", current_token.position, class_unknown);
+	symbol_table = create_table(symbol_table);
+	new_entry->children = symbol_table;
+	block();
+	symbol_table = symbol_table->parent;
+	add_entry(new_entry, symbol_table);
+	consume(sym_until2);
+	expression();
+}
+
+// até = “ate” expressão “repita” “⏎” bloco “fim_ate”.
+void stmt_until()
+{
+	consume(sym_until);
+	expression();
+	consume(sym_repeat);
+	consume(sym_new_line);
+	entry_t *new_entry = create_entry("ate", current_token.position, class_unknown);
+	symbol_table = create_table(symbol_table);
+	new_entry->children = symbol_table;
+	block();
+	symbol_table = symbol_table->parent;
+	add_entry(new_entry, symbol_table);
+	consume(sym_end_until);
+}
+
 // bloco =  { ( chamada_função | atribuição | declarações | retorno | se | enquanto | para | faça | caso | repita | até ) “⏎” }.
 void block()
 {
 	consume_new_line();
-	if(current_token.lexem.symbol == sym_identifier)
+	while(try_assert(sym_identifier)
+		|| try_assert(sym_var)
+		|| try_assert(sym_type)
+		|| try_assert(sym_const)
+		|| try_assert(sym_if)
+		|| try_assert(sym_case)
+		|| try_assert(sym_for)
+		|| try_assert(sym_do)
+		|| try_assert(sym_while)
+		|| try_assert(sym_repeat)
+		|| try_assert(sym_until))
 	{
-		declarations();
+		if(try_assert(sym_var) || try_assert(sym_type) || try_assert(sym_const))
+		{
+			declarations();
+		}
+		else if(try_assert(sym_if))
+		{
+			stmt_if();
+		}
+		else if(try_assert(sym_case))
+		{
+			stmt_case();
+		}
+		else if(try_assert(sym_for))
+		{
+			stmt_for();
+		}
+		else if(try_assert(sym_do))
+		{
+			stmt_do();
+		}
+		else if(try_assert(sym_while))
+		{
+			stmt_while();
+		}
+		else if(try_assert(sym_repeat))
+		{
+			stmt_repeat();
+		}
+		else if(try_assert(sym_until))
+		{
+			stmt_until();
+		}
+		else if(try_assert(sym_identifier))
+		{
+			entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
+			if(entry != NULL)
+			{
+				long size = sizeof(char)*strlen(entry->id);
+				long position = ftell(input_file) - size;
+				consume(sym_identifier);
+				position -= ftell(input_file);
+				position--;
+				if(try_assert(sym_open_paren))
+				{
+					fseek(input_file, position, SEEK_CUR);
+					read_char();
+					read_token();
+					function_call();
+				}
+				else if(try_assert(sym_open_bracket) || try_assert(sym_dot) || try_assert(sym_allocation))
+				{
+					fseek(input_file, position, SEEK_CUR);
+					read_char();
+					read_token();
+					allocarion();
+				}
+			}
+			else
+				mark(error_fatal, "Token \"%s\" é desconhecido.", current_token.lexem.id);
+		}
+		else
+			mark(error_fatal, "Token \"%s\" é desconhecido.", current_token.lexem.id);
 		consume(sym_new_line);
+		consume_new_line();
 	}
 }
 
@@ -404,19 +682,20 @@ void function_declaration()
 	consume(sym_function);
 	if(assert(sym_identifier))
 	{
-		if(find_entry(current_token.lexem.id, symbol_table) == NULL)
+		if(find_entry(current_token.lexem.id, symbol_table, true) == NULL)
 		{
 			entry_t *new_entry = create_entry(current_token.lexem.id, current_token.position, class_function);
 			add_entry(new_entry, symbol_table);
 			scan();
 			symbol_table = create_table(symbol_table);
+			new_entry->children = symbol_table;
 			if(try_assert(sym_open_paren))
 				parameters();
 			if(try_consume(sym_two_points))
 			{
 				if(!assert(sym_identifier))
 					mark(error_fatal, "Era esperado um tipo de dados mas foi encontrado \"%s\"", current_token.lexem.id);
-				entry_t *entry = find_entry(current_token.lexem.id, symbol_table);
+				entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
 				if(entry != NULL)
 				{
 					new_entry->type = entry->type;
@@ -427,7 +706,6 @@ void function_declaration()
 			}
 			consume(sym_new_line);
 			block();
-			symbol_table->parent->childrens = symbol_table;
 			symbol_table = symbol_table->parent;
 		}
 		else
@@ -446,15 +724,17 @@ void program()
 	consume(sym_identifier);
 	consume(sym_new_line);
 	consume_new_line();
-	while(try_assert(sym_identifier) || try_assert(sym_function) || try_assert(sym_const) || try_assert(sym_type))
+	while(try_assert(sym_var) || try_assert(sym_function) || try_assert(sym_const) || try_assert(sym_type))
 	{
-		if(try_assert(sym_identifier) || try_assert(sym_const) || try_assert(sym_type))
+		if(try_assert(sym_var) || try_assert(sym_const) || try_assert(sym_type))
 			declarations();
 		else if(try_assert(sym_function))
 			function_declaration();
 		consume(sym_new_line);
 		consume_new_line();
 	}
+	block();
+	consume_new_line();
 	consume(sym_end_algorith);
 }
 
