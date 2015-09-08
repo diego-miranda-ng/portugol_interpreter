@@ -75,6 +75,8 @@ void consume_until(symbol_t sym)
 
 void block();
 
+void expression();
+
 // variável = identificador { “[“ inteiro “]” }.
 entry_t *var()
 {
@@ -89,9 +91,7 @@ entry_t *var()
 		unsigned int size = 0;
 		do
 		{
-			if(assert(sym_integer))
-				length = atoi(current_token.lexem.id);
-			scan();
+			expression();
 			consume(sym_close_bracket);
 			if(type == NULL)
 			{
@@ -117,21 +117,26 @@ void var_declaration(bool search_parent)
 	entry_t *entry = NULL;
 	do
 	{
-		if(find_entry(current_token.lexem.id, symbol_table, search_parent) == NULL)
+		if(assert(sym_identifier))
 		{
-			if(table == NULL)
+			if(find_entry(current_token.lexem.id, symbol_table, search_parent) == NULL)
 			{
-				table = var();
-				entry = table;
+				if(table == NULL)
+				{
+					table = var();
+					entry = table;
+				}
+				else
+				{
+					entry->next = var();
+					entry = entry->next;
+				}
 			}
 			else
-			{
-				entry->next = var();
-				entry = entry->next;
-			}
+				mark(error_fatal, "O identificador \"%s\" já foi declarado anteriormente.", current_token.lexem.id);
 		}
 		else
-			mark(error_fatal, "O identificador \"%s\" já foi declarado anteriormente.", current_token.lexem.id);
+			mark(error_fatal, "O token \"%s\" é inválido como nome de uma variável. Era esperado um identificador.", current_token.lexem.id);
 	}
 	while(try_consume(sym_comma));
 	consume(sym_two_points);
@@ -165,10 +170,10 @@ void var_declaration(bool search_parent)
 			add_entry(table, symbol_table);
 		}
 		else
-		{
-			mark(error_fatal, "Era esperado um tipo de variável mas foi encontrado \"%s\".", current_token.lexem.id);
-		}
+			mark(error_fatal, "O tipo de dados \"%s\" não foi declarado anteriormente.", current_token.lexem.id);
 	}
+	else
+		mark(error_fatal, "O token \"%s\" é inválido como um tipo de dados. Era esperado um identificador.", current_token.lexem.id);
 }
 
 // parâmetros = “(“ declaração_variável { “;” declaração_variável } “)”.
@@ -182,8 +187,6 @@ void parameters()
 	while(try_consume(sym_semicolon));
 	consume(sym_close_paren);
 }
-
-void expression();
 
 // argumentos = “(“ [ expressão { “,” expressão } ] “)”.
 void arguments()
@@ -202,55 +205,36 @@ void arguments()
 		}
 		while(try_consume(sym_comma));
 	}
-	consume(sym_close_paren);
-}
-
-// chamada_função = identificador argumentos.
-void function_call()
-{
-	consume(sym_identifier);
-	arguments();
+	if(!consume(sym_close_paren))
+		mark(error_fatal, "O token \"%s\" é inválido.", current_token.lexem.id);
 }
 
 // seletor = { “.” identificador | “[“ expressão “]” }.
 void selector(entry_t *entry)
 {
-	if(try_consume(sym_dot))
+	while(try_assert(sym_dot) || try_assert(sym_open_bracket))
 	{
-		if(assert(sym_identifier))
+		if(try_consume(sym_dot))
 		{
-			if(find_field(current_token.lexem.id, entry) != NULL)
-				consume(sym_identifier);
+			if(assert(sym_identifier))
+			{
+				if(find_field(current_token.lexem.id, entry) != NULL)
+					consume(sym_identifier);
+				else
+					mark(error_fatal, "O identificador \"%s\" não foi declarado como um campo de \"%s\"",current_token.lexem.id, entry->id);
+			}
 			else
-				mark(error_fatal, "O identificador \"%s\" não foi declarado como um campo de \"%s\"",current_token.lexem.id, entry->id);
+				mark(error_fatal, "\"%s\" não é um identificador válido.", current_token.lexem.id);
 		}
-		else
-			mark(error_fatal, "\"%s\" não é um identificador válido.", current_token.lexem.id);
-	}
-	else if(try_consume(sym_open_bracket))
-	{
-		expression();
-		consume(sym_close_bracket);
-	}
-}
-
-// atribuição = identificador seletor “=” expressão.
-void allocarion()
-{
-	if(assert(sym_identifier))
-	{
-		entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
-		if(entry != NULL)
+		else if(try_consume(sym_open_bracket))
 		{
-			consume(sym_identifier);
-			selector(entry);
-			consume(sym_allocation);
 			expression();
+			consume(sym_close_bracket);
 		}
 	}
 }
 
-// fator = texto | inteiro | decimal | chamada_função | identificador seletor | “(“ expressão “)” | “nao” fator.
+// fator = texto | inteiro | decimal | identificador ( seletor | argumentos ) | “(“ expressão “)” | “nao” fator.
 void factor()
 {
 	if(try_assert(sym_identifier))
@@ -258,31 +242,20 @@ void factor()
 		entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
 		if(entry != NULL)
 		{
-			long size = sizeof(char)*strlen(entry->id);
-			long position = ftell(input_file) - size;
 			consume(sym_identifier);
-			position -= ftell(input_file);
-			position--;
 			if(try_assert(sym_open_paren))
-			{
-				fseek(input_file, position, SEEK_CUR);
-				strcpy(current_token.lexem.id, "");
-				read_char();
-				read_token();
-				function_call();
-			}
-			else
-			{
+				arguments();
+			else if(try_assert(sym_dot) || try_assert(sym_open_bracket))
 				selector(entry);
-			}
 		}
 		else
-			mark(error_parser, "\"%s\" não foi declarado anteriormente.", current_token.lexem.id);
+			mark(error_parser, "O identificador \"%s\" não foi declarado anteriormente.", current_token.lexem.id);
 	}
 	else if(try_consume(sym_open_paren))
 	{
 		expression();
-		consume(sym_close_paren);
+		if(!try_consume(sym_close_paren))
+			mark(error_fatal, "Era esperado \")\" mas foi encontrado \"%s\".", current_token.lexem.id);
 	}
 	else if(try_consume(sym_not))
 	{
@@ -292,7 +265,7 @@ void factor()
 	else if(try_consume(sym_string) || try_consume(sym_integer) || try_consume(sym_float))
 		return;
 	else
-		mark(error_parser, "Fator perdido.");
+		mark(error_parser, "Fator perdido. O token \"%s\" é inválido na posição atual.");
 }
 
 // termo = fator { ( “*” | “/” | “e” ) fator }.
@@ -380,7 +353,7 @@ void type_declaration()
 				new_entry->type = create_type(form_record, 0, size, entry, NULL);
 			}
 			else
-				mark(error_fatal, "Durante a adeclaração de um tipo era esperado um identificador ou a palavra-chave registro mas foi encontrado \"%s\".", current_token.lexem.id);
+				mark(error_fatal, "Era esperado um identificador ou a palavra-chave registro mas foi encontrado \"%s\".", current_token.lexem.id);
 			add_entry(new_entry, symbol_table);
 			consume(sym_new_line);
 		}
@@ -388,7 +361,7 @@ void type_declaration()
 			mark(error_parser, "O identificador \"%s\" não foi declarado.", current_token.lexem.id);
 	}
 	else
-		mark(error_fatal, "\"%s\" é inválido como identificador de uma função.", current_token.lexem.id);
+		mark(error_fatal, "O token \"%s\" é inválido como identificador de uma função.", current_token.lexem.id);
 }
 
 // declaração_constante = “constante” identificador “=” expressão.
@@ -410,7 +383,7 @@ void const_declaration()
 			mark(error_warning, "O identificador \"%s\" já foi declarado anteriormente.", current_token.lexem.id);
 	}
 	else
-		mark(error_fatal, "O identificador \"%s\" é inválido.", current_token.lexem.id);
+		mark(error_fatal, "O token \"%s\" é inválido. Era esperando um identificador.", current_token.lexem.id);
 }
 
 // declarações =  declaração_tipo | declaração_constante | declaração_variável.
@@ -592,6 +565,43 @@ void stmt_until()
 	consume(sym_end_until);
 }
 
+// retorno = “retorne” expressão.
+void stmt_return()
+{
+	consume(sym_return);
+	expression();
+}
+
+// decisão = identificador ( argumentos | seletor “=” expressão ).
+void decision()
+{
+	entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
+	if(entry != NULL)
+	{
+		consume(sym_identifier);
+		if(try_assert(sym_open_paren))
+			arguments();
+		else if(try_assert(sym_dot) || try_assert(sym_open_bracket) || try_assert(sym_allocation))
+		{
+			selector(entry);
+			consume(sym_allocation);
+			if(try_assert(sym_string) 
+			|| try_assert(sym_integer) 
+			|| try_assert(sym_float) 
+			|| try_assert(sym_identifier)
+			|| try_assert(sym_open_paren)
+			|| try_assert(sym_not))
+				expression();
+			else
+				mark(error_fatal, "O token \"%s\" é inválido.", current_token.lexem.id);
+		}
+		else
+			mark(error_fatal, "O token \"%s\" é inválido. Era esperado \".\", \"[\" ou \"=\".", current_token.lexem.id);
+	}
+	else
+		mark(error_fatal, "O identificador \"%s\" não foi declarado anteriormente.", current_token.lexem.id);
+}
+
 // bloco =  { ( chamada_função | atribuição | declarações | retorno | se | enquanto | para | faça | caso | repita | até ) “⏎” }.
 void block()
 {
@@ -606,7 +616,8 @@ void block()
 		|| try_assert(sym_do)
 		|| try_assert(sym_while)
 		|| try_assert(sym_repeat)
-		|| try_assert(sym_until))
+		|| try_assert(sym_until)
+		|| try_assert(sym_return))
 	{
 		if(try_assert(sym_var) || try_assert(sym_type) || try_assert(sym_const))
 		{
@@ -642,35 +653,16 @@ void block()
 		}
 		else if(try_assert(sym_identifier))
 		{
-			entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
-			if(entry != NULL)
-			{
-				long size = sizeof(char)*strlen(entry->id);
-				long position = ftell(input_file) - size;
-				consume(sym_identifier);
-				position -= ftell(input_file);
-				position--;
-				if(try_assert(sym_open_paren))
-				{
-					fseek(input_file, position, SEEK_CUR);
-					read_char();
-					read_token();
-					function_call();
-				}
-				else if(try_assert(sym_open_bracket) || try_assert(sym_dot) || try_assert(sym_allocation))
-				{
-					fseek(input_file, position, SEEK_CUR);
-					read_char();
-					read_token();
-					allocarion();
-				}
-			}
-			else
-				mark(error_fatal, "Token \"%s\" é desconhecido.", current_token.lexem.id);
+			decision();
+		}
+		else if(try_assert(sym_return))
+		{
+			stmt_return();
 		}
 		else
 			mark(error_fatal, "Token \"%s\" é desconhecido.", current_token.lexem.id);
-		consume(sym_new_line);
+		if(!consume(sym_new_line))
+			scan();
 		consume_new_line();
 	}
 }
