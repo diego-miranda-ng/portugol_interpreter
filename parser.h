@@ -68,11 +68,6 @@ void consume_new_line()
 	while(try_consume(sym_new_line));
 }
 
-void consume_until(symbol_t sym)
-{
-	while(!try_consume(sym) && current_token.lexem.symbol != sym_eof);
-}
-
 void block();
 
 void expression();
@@ -165,7 +160,7 @@ void var_declaration(bool search_parent)
 				}
 			}
 			else
-				mark(error_fatal,"Este tipo de variável não é válido");
+				mark(error_fatal,"Este tipo de dados não é válido ou não foi declarado.");
 			scan();
 			add_entry(table, symbol_table);
 		}
@@ -182,7 +177,7 @@ void parameters()
 	consume(sym_open_paren);
 	do
 	{
-		var_declaration(true);
+		var_declaration(false);
 	}
 	while(try_consume(sym_semicolon));
 	consume(sym_close_paren);
@@ -216,7 +211,7 @@ void selector(entry_t *entry)
 	{
 		if(try_consume(sym_dot))
 		{
-			if(assert(sym_identifier))
+			if(try_assert(sym_identifier))
 			{
 				if(find_field(current_token.lexem.id, entry) != NULL)
 					consume(sym_identifier);
@@ -224,7 +219,7 @@ void selector(entry_t *entry)
 					mark(error_fatal, "O identificador \"%s\" não foi declarado como um campo de \"%s\"",current_token.lexem.id, entry->id);
 			}
 			else
-				mark(error_fatal, "\"%s\" não é um identificador válido.", current_token.lexem.id);
+				mark(error_fatal, "Era esperado um identificador mas foi encontrado \"%s\".", current_token.lexem.id);
 		}
 		else if(try_consume(sym_open_bracket))
 		{
@@ -334,7 +329,7 @@ void type_declaration()
 						consume(sym_new_line);
 					}
 					while(try_assert(sym_identifier));
-					entry = symbol_table->entry;
+					entry = symbol_table->entries;
 					if(entry != NULL)
 					{
 						entry_t *e = entry;
@@ -349,11 +344,12 @@ void type_declaration()
 					free(new_entry->children);
 					new_entry->children = NULL;
 				}
-				consume(sym_end_registry);
+				if(!try_consume(sym_end_registry))
+					mark(error_fatal, "Era esperado um identificador ou \"fim_registro\" mas foi encontrado \"%s\".", current_token.lexem.id);
 				new_entry->type = create_type(form_record, 0, size, entry, NULL);
 			}
 			else
-				mark(error_fatal, "Era esperado um identificador ou a palavra-chave registro mas foi encontrado \"%s\".", current_token.lexem.id);
+				mark(error_fatal, "Era esperado um identificador ou \"registro\" mas foi encontrado \"%s\".", current_token.lexem.id);
 			add_entry(new_entry, symbol_table);
 			consume(sym_new_line);
 		}
@@ -393,7 +389,7 @@ void declarations()
 	if(try_consume(sym_var))
 	{
 		if(assert(sym_identifier))
-			var_declaration(true);
+			var_declaration(false);
 	}
 	else if(try_assert(sym_const))
 		const_declaration();
@@ -448,11 +444,13 @@ void stmt_case()
 	consume(sym_case);
 	expression();
 	consume(sym_new_line);
-	consume(sym_be);
+	if(!try_consume(sym_be))
+		mark(error_fatal, "Era esperado \"seja\" mas foi encontrado \"%s\".", current_token.lexem.id);
 	do
 	{
 		expression();
-		consume(sym_two_points);
+		if(!consume(sym_two_points))
+			scan();
 		consume(sym_new_line);
 		new_entry = create_entry("caso", current_token.position, class_unknown);
 		symbol_table = create_table(symbol_table);
@@ -584,7 +582,8 @@ void decision()
 		else if(try_assert(sym_dot) || try_assert(sym_open_bracket) || try_assert(sym_allocation))
 		{
 			selector(entry);
-			consume(sym_allocation);
+			if(!try_consume(sym_allocation))
+				mark(error_fatal, "Era esperado \"=\" mas foi encontrado \"%s\".", current_token.lexem.id);
 			if(try_assert(sym_string) 
 			|| try_assert(sym_integer) 
 			|| try_assert(sym_float) 
@@ -620,49 +619,28 @@ void block()
 		|| try_assert(sym_return))
 	{
 		if(try_assert(sym_var) || try_assert(sym_type) || try_assert(sym_const))
-		{
 			declarations();
-		}
 		else if(try_assert(sym_if))
-		{
 			stmt_if();
-		}
 		else if(try_assert(sym_case))
-		{
 			stmt_case();
-		}
 		else if(try_assert(sym_for))
-		{
 			stmt_for();
-		}
 		else if(try_assert(sym_do))
-		{
 			stmt_do();
-		}
 		else if(try_assert(sym_while))
-		{
 			stmt_while();
-		}
 		else if(try_assert(sym_repeat))
-		{
 			stmt_repeat();
-		}
 		else if(try_assert(sym_until))
-		{
 			stmt_until();
-		}
 		else if(try_assert(sym_identifier))
-		{
 			decision();
-		}
 		else if(try_assert(sym_return))
-		{
 			stmt_return();
-		}
 		else
-			mark(error_fatal, "Token \"%s\" é desconhecido.", current_token.lexem.id);
-		if(!consume(sym_new_line))
-			scan();
+			mark(error_fatal, "O token \"%s\" é desconhecido.", current_token.lexem.id);
+		consume(sym_new_line);
 		consume_new_line();
 	}
 }
@@ -688,13 +666,14 @@ void function_declaration()
 				if(!assert(sym_identifier))
 					mark(error_fatal, "Era esperado um tipo de dados mas foi encontrado \"%s\"", current_token.lexem.id);
 				entry_t *entry = find_entry(current_token.lexem.id, symbol_table, true);
-				if(entry != NULL)
+				type_t *type = entry->type;
+				if(entry != NULL && (type->form == form_atomic || type->form == form_record))
 				{
-					new_entry->type = entry->type;
+					new_entry->type = type;
 					scan();
 				}
 				else
-					mark(error_fatal, "\"%s\" não é um tipo válido.", current_token.lexem.id);
+					mark(error_fatal, "\"%s\" não é válido ou não foi declarado.", current_token.lexem.id);
 			}
 			consume(sym_new_line);
 			block();
