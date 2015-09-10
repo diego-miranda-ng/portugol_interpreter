@@ -36,25 +36,32 @@ typedef struct _type
 	struct _type *base;
 } type_t;
 
+struct _symbol_table;
+
 // Representa uma entrada da tabela de simbolos.
 typedef struct _entry
 {
 	identifier_t id;
 	position_t position;
-	address_t address;
 	class_t class;
 	value_t value;
 	struct _type *type;
 	struct _entry *next;
-	struct _entry *parent;
+	struct _symbol_table *children;
 } entry_t;
+
+typedef struct _symbol_table
+{
+	entry_t *entries;
+	struct _symbol_table *parent;
+} symbol_table_t;
 
 typedef enum _addressing
 {
 	addressing_unknown,
 	addressing_direct,
 	addressing_immediate,
-	addressing_rsegister,
+	addressing_register,
 	addressing_indirect,
 	addressing_condition
 } addressing_t;
@@ -65,26 +72,33 @@ entry_t *boolean_type;
 entry_t *float_type;
 entry_t *string_type;
 
-bool clear_table(entry_t *table)
+bool clear_table(symbol_table_t *table)
 {
+	entry_t *entry = table->entries, *entry_aux;
+	while(entry != NULL)
+	{
+		entry_aux = entry;
+		entry = entry->next;
+		free(entry_aux);
+	}
+	table->entries = NULL;
 }
 
-entry_t *create_entry(identifier_t id, position_t position, class_t class, entry_t *parent)
+entry_t *create_entry(identifier_t id, position_t position, class_t class)
 {
 	entry_t *new_entry = (entry_t *)malloc(sizeof(entry_t));
 	if(!new_entry)
 	{
-		printf("\n\nERRO!!\n\n"); // A memória não foi alocada.
+		mark(error_fatal, "Não há memória suficiente.");
 		return NULL;
 	}
 	strcpy(new_entry->id, id);
 	new_entry->position = position;
-	new_entry->address = 0;
 	new_entry->class = class;
 	new_entry->type = NULL;
 	new_entry->value = 0;
 	new_entry->next = NULL;
-	new_entry->parent = parent;
+	new_entry->children = NULL;
 	return new_entry;
 }
 
@@ -93,7 +107,7 @@ type_t *create_type(form_t form, value_t length, unsigned int size, entry_t *fie
 	type_t *type = (type_t *)malloc(sizeof(type_t));
 	if(!type)
 	{
-		printf("\n\nERRO!!\n\n"); // A memória não foi alocada.
+		mark(error_fatal, "Não há memória suficiente.");
 		return NULL;
 	}
 	type->form = form;
@@ -106,16 +120,16 @@ type_t *create_type(form_t form, value_t length, unsigned int size, entry_t *fie
 
 entry_t *create_elementary_type(identifier_t id)
 {
-	entry_t *entry = create_entry(id, position_zero, class_type, NULL);
+	entry_t *entry = create_entry(id, position_zero, class_type);
 	if(!entry)
 	{
-		printf("\n\nERRO!!\n\n"); // Entry não foi criado.
+		mark(error_fatal, "Não há memória suficiente.");
 		return NULL;
 	}
 	type_t *type = create_type(form_atomic, 0, sizeof(value_t), NULL, NULL);
 	if(!type)
 	{
-		printf("\n\nERRO!!\n\n"); // Type não foi criado.
+		mark(error_fatal, "Não há memória suficiente.");
 		free(entry);
 		return NULL;
 	}
@@ -123,70 +137,107 @@ entry_t *create_elementary_type(identifier_t id)
 	return entry;
 }
 
-entry_t *find_entry(identifier_t id, entry_t *table)
+entry_t *find_entry(identifier_t id, symbol_table_t *table, bool search_parent)
 {
 	if(table == NULL)
 		return NULL;
-	entry_t *table_aux = table;
+	entry_t *entry_aux;
+	symbol_table_t *table_aux = table;
+	if(table->entries != NULL)
+		entry_aux = table->entries;
+	else if(table->parent != NULL && search_parent == true)
+	{
+		table_aux = table->parent;
+		entry_aux = table_aux->entries;
+	}
+	else
+		return NULL;
+
 	do
 	{
-		if(!strcmp(table_aux->id, id))
+		if(entry_aux->id != NULL && !strcmp(entry_aux->id, id))
 			break;
-		if(table_aux->next == NULL && table_aux->parent != NULL)
+		if((entry_aux == NULL || (entry_aux->next == NULL && table_aux->parent != NULL)) && search_parent == true)
+		{
 			table_aux = table_aux->parent;
+			entry_aux = table_aux->entries;
+		}
 		else
-			table_aux = table_aux->next;
+		{
+			entry_aux = entry_aux->next;
+		}
 	}
-	while(table_aux != NULL);
-	return table_aux;
+	while(entry_aux != NULL);
+	return entry_aux;
 }
 
-bool add_entry(entry_t *entry, entry_t *table)
+entry_t *find_field(identifier_t id, entry_t *entry)
 {
 	if(entry == NULL)
-		return false;
-		
-	if(find_entry(entry->id, table))
-	{
-		mark_at(error_parser, entry->position, "O identificador \"%s\" foi anteriormente declarado.", entry->id);
-		return false;
-	}
+		return NULL;
 
-	entry_t *table_aux = table;
-	while(table_aux->next != NULL)
-		table_aux = table_aux->next;
-	table_aux->next = entry;
-	
+	entry_t *entry_aux = entry->type->fields;
+	do
+	{
+		if(!strcmp(entry_aux->id, id))
+			break;
+		else
+			entry_aux = entry_aux->next;
+	}
+	while(entry_aux != NULL);
+	return entry_aux;
+}
+
+bool add_entry(entry_t *entry, symbol_table_t *table)
+{
+	if(entry == NULL || table == NULL)
+		return false;
+
+	if(table->entries == NULL)
+	{
+		table->entries = entry;
+	}
+	else
+	{
+		entry_t *entry_aux = table->entries;
+		while(entry_aux->next != NULL)
+			entry_aux = entry_aux->next;
+		entry_aux->next = entry;
+	}
 	return true;
 }
 
-
-entry_t *initialize_table(address_t base_address)
+symbol_table_t *create_table(symbol_table_t *parent)
 {
-	entry_t *table;
-	current_address = base_address;
+	symbol_table_t *table = malloc(sizeof(symbol_table_t));
+	table->parent = parent;
+	table->entries = NULL;
+	return table;
+}
+
+symbol_table_t *initialize_table()
+{
+	symbol_table_t *table = create_table(NULL);
 	integer_type = create_elementary_type("inteiro");
 	float_type = create_elementary_type("decimal");
 	boolean_type = create_elementary_type("logico");
 	string_type = create_elementary_type("texto");
 	if(!integer_type || !float_type || !boolean_type || !string_type)
 		return NULL;
-	// add_entry(integer_type, table);
-	table = integer_type;
+
+	add_entry(integer_type, table);
 	add_entry(float_type, table);
 	add_entry(boolean_type, table);
 	add_entry(string_type, table);
 	return table;
 }
 
-void show_content(entry_t *table)
+void show_content(symbol_table_t *table)
 {
 	if(table == NULL)
 		return;
 
-	printf("\n%s\n", table->id);
-
-	entry_t *table_aux = table;
+	entry_t *table_aux = table->entries;
 	type_t *type = NULL;
 	while(table_aux != NULL)
 	{
