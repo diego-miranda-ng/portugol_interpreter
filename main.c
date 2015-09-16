@@ -8,8 +8,6 @@
 
 int main()
 {
-	entry_t *t;
-	t = initialize_table(0);
-	initialize_parser(fopen("cod_portugol.txt", "r"), t);
+	initialize_parser(fopen("codigo_portugol.txt", "r"));
 	parse();
 }
