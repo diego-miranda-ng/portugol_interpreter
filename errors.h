@@ -49,7 +49,7 @@ void mark_at(error_t error, position_t position, char message[],...)
 			printf("Erro desconhecido em ");
 			break;
 	}
-	printf("(%d,%d):", position.line, position.column);
+	printf("(%d,%d): ", position.line, position.column);
 	va_list args;
 	va_start(args, message);
 	vprintf(message, args);
@@ -92,7 +92,7 @@ void mark(error_t error, char message[],...)
 			printf("Erro desconhecido em ");
 			break;
 	}
-	printf("(%d,%d):", current_token.position.line, current_token.position.column);
+	printf("(%d,%d): ", current_token.position.line, current_token.position.column);
 	va_list args;
 	va_start(args, message);
 	vprintf(message, args);
