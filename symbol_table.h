@@ -231,30 +231,3 @@ symbol_table_t *initialize_table()
 	add_entry(string_type, table);
 	return table;
 }
-
-void show_content(symbol_table_t *table)
-{
-	if(table == NULL)
-		return;
-
-	entry_t *table_aux = table->entries;
-	type_t *type = NULL;
-	while(table_aux != NULL)
-	{
-		type = table_aux->type;
-		printf("ID: %s\n", table_aux->id);
-		while(type != NULL)
-		{
-			if(type->form == 0)
-				printf("Atomic\n");
-			else if(type->form == 1)
-				printf("Array\n");
-			else if(type->form == 2)
-				printf("Record\n");
-			printf("Length: %d\n", type->length);
-			type = type->base;
-		}
-		printf("\n----------------------------------------------------\n\n");
-		table_aux = table_aux->next;
-	}
-}
