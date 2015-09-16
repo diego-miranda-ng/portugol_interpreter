@@ -81,7 +81,7 @@ typedef enum _symbol
 	sym_close_bracket, // ]
 	sym_open_key, // {
 	sym_close_key, // }
-	sym_two_points, // :
+	sym_colon, // :
 	sym_new_line, // \n \n\r
 	sym_null, // null
 	sym_eof // eof
@@ -127,11 +127,11 @@ lexem_t keywords[] = {
 	{"retorne", sym_return},
 	{"funcao", sym_function},
 	{"fim_funcao", sym_end_function},
-	{"variavel", sym_var},
+	{"var", sym_var},
 	{"tipo", sym_type},
 	{"registro", sym_registry},
 	{"fim_registro", sym_end_registry},
-	{"constante", sym_const},
+	{"const", sym_const},
 	{"ou", sym_or},
 	{"xou", sym_or_exclusive},
 	{"e", sym_and},
@@ -196,7 +196,7 @@ lexem_t pontuation[] = {
 	{",", sym_comma},
 	{".", sym_dot},
 	{";", sym_semicolon},
-	{":", sym_two_points}
+	{":", sym_colon}
 };
 const unsigned int pontuation_count = sizeof(pontuation) / sizeof(lexem_t);
 
@@ -492,7 +492,7 @@ bool read_token()
 			current_token.lexem.symbol = sym_comma;
 			break;
 		case ':':
-			current_token.lexem.symbol = sym_two_points;
+			current_token.lexem.symbol = sym_colon;
 			break;
 		case '(':
 				current_token.lexem.symbol = sym_open_paren;
