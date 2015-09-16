@@ -1,0 +1,64 @@
+algoritmo estruturas
+    var val_1, val_2 : inteiro
+
+    funcao soma(x, y : inteiro) : inteiro
+        retorne x + y
+    fim_funcao
+
+    const so_teste = 10+20/2
+
+    var resultado : inteiro
+    resultado = soma(val_1, val_2)
+
+    var cont : inteiro
+    para cont de 0 ate 100 passo 1 faca
+        resultado = soma(cont, resultado) * 100 / 2
+    fim_para
+
+    cont = 0
+    var array_inteiros[10] : inteiro
+    enquanto cont < 10 faca
+        var array_inteiros[10] : inteiro
+        array_inteiros[cont] = (cont + 1) * 2
+    fim_enquanto
+
+    cont = 0
+    faca
+        array_inteiros[cont] = (cont + 1) * 2
+    sempre_que cont < 10
+
+    cont = 0
+    ate cont > 9 repita
+        array_inteiros[cont] = (cont + 1) * 2
+    fim_ate
+
+    cont = 0
+    repita
+        array_inteiros[cont] = (cont + 1) * 2
+    ate_que cont > 9
+
+    tipo pessoa = registro
+        nome : texto
+        idade : inteiro
+    fim_registro
+
+    var pessoa_1[2] : pessoa
+    pessoa[0].nome = "Diego" pessoa[0].idade = 19
+    pessoa[1].nome = "Alvaro Costa Neto"
+    pessoa[1].idade = 30
+
+    se pessoa[0].idade < pessoa[1].idade entao
+        soma("Alvaro Costa Neto é mais velho")
+    senao_se pessoa[0].idade > pessoa[1] entao
+        soma("Diego é mais vleho (Isso está errado!!)")
+    senao
+        soma("Algo está errado!!")
+    fim_se
+
+    caso pessoa[0].idade
+        seja 19:
+            soma("A idade está correta!!")
+        senao:
+            soma("Está errada!!")
+    fim_caso
+fim_algoritmo
