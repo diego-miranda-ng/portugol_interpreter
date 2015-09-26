@@ -1,13 +1,13 @@
+
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "scanner.h"
 
 typedef unsigned short address_t;
 typedef signed char value_t;
 
-// Diferencia as classes dos elementos entre variáveis,
-// consstantes, tipos, procedimentos e desconhecidos.
+// Diferencia as classes dos elementos entre variáveis, consstantes,
+// tipos, procedimentos e desconhecidos.
+/*-----------------------------------------------------------------------------------------*/
 typedef enum _class
 {
 	class_unknown,
@@ -18,6 +18,7 @@ typedef enum _class
 } class_t;
 
 // Diferencia os elementos entre tipos estruturados (Vetor e Registros).
+/*-----------------------------------------------------------------------------------------*/
 typedef enum _form
 {
 	form_atomic,
@@ -27,6 +28,8 @@ typedef enum _form
 
 struct _entry;
 
+// Armazena um tipo de dados de um identificador.
+/*-----------------------------------------------------------------------------------------*/
 typedef struct _type
 {
 	form_t form;
@@ -39,6 +42,7 @@ typedef struct _type
 struct _symbol_table;
 
 // Representa uma entrada da tabela de simbolos.
+/*-----------------------------------------------------------------------------------------*/
 typedef struct _entry
 {
 	identifier_t id;
@@ -50,184 +54,66 @@ typedef struct _entry
 	struct _symbol_table *children;
 } entry_t;
 
+// Representa uma tabela de símbolos.
+/*-----------------------------------------------------------------------------------------*/
 typedef struct _symbol_table
 {
 	entry_t *entries;
 	struct _symbol_table *parent;
 } symbol_table_t;
 
-typedef enum _addressing
-{
-	addressing_unknown,
-	addressing_direct,
-	addressing_immediate,
-	addressing_register,
-	addressing_indirect,
-	addressing_condition
-} addressing_t;
+extern address_t current_address;
+extern entry_t *integer_type;
+extern entry_t *boolean_type;
+extern entry_t *float_type;
+extern entry_t *string_type;
 
-address_t current_address;
-entry_t *integer_type;
-entry_t *boolean_type;
-entry_t *float_type;
-entry_t *string_type;
+// Limpa uma tabela de símbolos recebendo como parâmetro a tabela de símbolos.
+/*-----------------------------------------------------------------------------------------*/
+bool clear_table(symbol_table_t *table);
 
-bool clear_table(symbol_table_t *table)
-{
-	entry_t *entry = table->entries, *entry_aux;
-	while(entry != NULL)
-	{
-		entry_aux = entry;
-		entry = entry->next;
-		free(entry_aux);
-	}
-	table->entries = NULL;
-}
+// cria uma entrada para uma tabela de símbolos.
+// identifier_t id é o nome do identificador.
+// position_t position recebe a posição do identificador no código-fonte.
+// class_t class recebe a classe do identificador.
+// Retorna a entrada criada ou NULL se ela não for criada.
+/*-----------------------------------------------------------------------------------------*/
+entry_t *create_entry(identifier_t id, position_t position, class_t class);
 
-entry_t *create_entry(identifier_t id, position_t position, class_t class)
-{
-	entry_t *new_entry = (entry_t *)malloc(sizeof(entry_t));
-	if(!new_entry)
-	{
-		mark(error_fatal, "Não há memória suficiente.");
-		return NULL;
-	}
-	strcpy(new_entry->id, id);
-	new_entry->position = position;
-	new_entry->class = class;
-	new_entry->type = NULL;
-	new_entry->value = 0;
-	new_entry->next = NULL;
-	new_entry->children = NULL;
-	return new_entry;
-}
+// Esta função cria um tipo de dados.
+// form_t form é a forma do tipo de dados.
+// value_t length é o comprimento do tipo de dados.
+// int size é o tamanho do tipo de dados.
+// entry_t *fields é utilizado caso serja um registro para assim armazenar seus campos.
+// type_t *base armana o tipo de dados base para o que será criado.
+// Retorna o tipo de dados criado ou NULL se não for criada.
+/*-----------------------------------------------------------------------------------------*/
+type_t *create_type(form_t form, value_t length, unsigned int size, entry_t *fields, type_t *base);
 
-type_t *create_type(form_t form, value_t length, unsigned int size, entry_t *fields, type_t *base)
-{
-	type_t *type = (type_t *)malloc(sizeof(type_t));
-	if(!type)
-	{
-		mark(error_fatal, "Não há memória suficiente.");
-		return NULL;
-	}
-	type->form = form;
-	type->length = length;
-	type->size = size;
-	type->fields = fields;
-	type->base = base;
-	return type;
-}
+// Encontra uma entrada em na tabela de símbolos.
+// identifier_t id é o nome do identificador a ser encontrado.
+// symbol_table_t *table é a tabela de símbolos onde será procurado.
+// bool search_parent é para indicar com true se é para procurar nos escopos acima ou false.
+// Retorna a entrada se encontrada ou NULLcaso contrário.
+/*-----------------------------------------------------------------------------------------*/
+entry_t *find_entry(identifier_t id, symbol_table_t *table, bool search_parent);
 
-entry_t *create_elementary_type(identifier_t id)
-{
-	entry_t *entry = create_entry(id, position_zero, class_type);
-	if(!entry)
-	{
-		mark(error_fatal, "Não há memória suficiente.");
-		return NULL;
-	}
-	type_t *type = create_type(form_atomic, 0, sizeof(value_t), NULL, NULL);
-	if(!type)
-	{
-		mark(error_fatal, "Não há memória suficiente.");
-		free(entry);
-		return NULL;
-	}
-	entry->type = type;
-	return entry;
-}
+// Esta função possui a função de encontrar um campo em uma lista de entradas.
+// identifier_t id é o nome do identificador a ser encontrado.
+// entry_t *entry é a lista de entradas.
+/*-----------------------------------------------------------------------------------------*/
+entry_t *find_field(identifier_t id, entry_t *entry);
 
-entry_t *find_entry(identifier_t id, symbol_table_t *table, bool search_parent)
-{
-	if(table == NULL)
-		return NULL;
-	entry_t *entry_aux;
-	symbol_table_t *table_aux = table;
-	if(table->entries != NULL)
-		entry_aux = table->entries;
-	else if(table->parent != NULL && search_parent == true)
-	{
-		table_aux = table->parent;
-		entry_aux = table_aux->entries;
-	}
-	else
-		return NULL;
+// Esta função adiciona uma entrada a uma tabela de símbolos.
+// entry_t *entry é a entrada a ser adicionada.
+// symbo_tale_t *table é a tabela de símbolos onde será adicionada a entrada.
+/*-----------------------------------------------------------------------------------------*/
+bool add_entry(entry_t *entry, symbol_table_t *table);
 
-	do
-	{
-		if(entry_aux->id != NULL && !strcmp(entry_aux->id, id))
-			break;
-		if((entry_aux == NULL || (entry_aux->next == NULL && table_aux->parent != NULL)) && search_parent == true)
-		{
-			table_aux = table_aux->parent;
-			entry_aux = table_aux->entries;
-		}
-		else
-		{
-			entry_aux = entry_aux->next;
-		}
-	}
-	while(entry_aux != NULL);
-	return entry_aux;
-}
+// Cria uma tabela de símbolos passando por parâmentro a tabela de símbolos que ela pertence
+/*-----------------------------------------------------------------------------------------*/
+symbol_table_t *create_table(symbol_table_t *parent);
 
-entry_t *find_field(identifier_t id, entry_t *entry)
-{
-	if(entry == NULL)
-		return NULL;
-
-	entry_t *entry_aux = entry->type->fields;
-	do
-	{
-		if(!strcmp(entry_aux->id, id))
-			break;
-		else
-			entry_aux = entry_aux->next;
-	}
-	while(entry_aux != NULL);
-	return entry_aux;
-}
-
-bool add_entry(entry_t *entry, symbol_table_t *table)
-{
-	if(entry == NULL || table == NULL)
-		return false;
-
-	if(table->entries == NULL)
-	{
-		table->entries = entry;
-	}
-	else
-	{
-		entry_t *entry_aux = table->entries;
-		while(entry_aux->next != NULL)
-			entry_aux = entry_aux->next;
-		entry_aux->next = entry;
-	}
-	return true;
-}
-
-symbol_table_t *create_table(symbol_table_t *parent)
-{
-	symbol_table_t *table = malloc(sizeof(symbol_table_t));
-	table->parent = parent;
-	table->entries = NULL;
-	return table;
-}
-
-symbol_table_t *initialize_table()
-{
-	symbol_table_t *table = create_table(NULL);
-	integer_type = create_elementary_type("inteiro");
-	float_type = create_elementary_type("decimal");
-	boolean_type = create_elementary_type("logico");
-	string_type = create_elementary_type("texto");
-	if(!integer_type || !float_type || !boolean_type || !string_type)
-		return NULL;
-
-	add_entry(integer_type, table);
-	add_entry(float_type, table);
-	add_entry(boolean_type, table);
-	add_entry(string_type, table);
-	return table;
-}
+// Esta função inicia a tabela de símbolos.
+/*-----------------------------------------------------------------------------------------*/
+symbol_table_t *initialize_table();
