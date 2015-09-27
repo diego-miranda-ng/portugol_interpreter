@@ -2,6 +2,15 @@
 ##RESUMO
 O objetivo deste projeto é criar um interpretador para uma linguagem de programação derivada do Português Estruturado. O objetivo desta linguagem é auxiliar alunos iniciantes de programação no estudo de algoritmos e com o código-fonte do interpretador disponibilizado online possibilitar que qualquer pessoa tenha acesso a ele para melhorá-lo ou utilizá-lo em outros projetos ou estudos.
 
+##Elementos Léxicos
+*texto* = **"** { *identificador* | *pontuação* | *inteiro* | ** ** } **"**.<br/>
+*identificador* = ( *letra* | **_**  *letra* ){ *letra* | *digito* | **_** }.<br/>
+*decimal* = *inteiro* **.** *inteiro*.<br/>
+*inteiro* = *dígito* { *dígito* }.<br/>
+*letra* = **a** | **b** | ... | **z** | **A** | **B** | ... | **Z**.<br/>
+*dígito* = **0** | **1** | **2** | **3** | **4** | **5** | **6** | **7** | **8** | **9**.<br/>
+*pontuação* = **(** | **)** | **[** | **]** | **{** | **}** | **\**** | “\'” | **,** | **;** | **!** | **@** | **#** | **%** | **$** | **&** | **.** | **\** | **?** | **:** | **=** | **_** | **<** | **>**.<br/>
+
 ##Sintaxe da linguagem
 *programa* = **algoritmo** *identificador* **⏎** { ( *declarações* | *declaração_função* ) **⏎** } *bloco* **fim_algoritmo**.<br/>
 *bloco* =  { ( *decisão* | *declarações* | *retorno* | *se* | *enquanto* | *para* | *faça* | *caso* | *repita* | *até* ) **⏎** }.<br/><br/>
