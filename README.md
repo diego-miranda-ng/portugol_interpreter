@@ -17,7 +17,7 @@ O objetivo deste projeto é criar um interpretador para uma linguagem de program
 *declaração_variável* = *variável* { **,** *variável* } **:** *identificador*.<br/><br/>
 *expressão* =  *expressão_simples* { ( **<** | **>** | **<=** | **>=** | **==** ) *expressão_simples*}.<br/>
 *expressão_simples* = [ **+** | **-** ] *termo* { ( **+** | **-** | **ou** ) *termo* }.<br/>
-*termo* = *fator* { ( ***** | **/** | **e** ) *fator* }.<br/>
+*termo* = *fator* { ( **\*** | **/** | **e** ) *fator* }.<br/>
 *seletor* = { **.** *identificador* | **[** *expressão* **]** }.<br/>
 *fator* = *texto* | *inteiro* | *decimal* | *identificador* ( *seletor* | *argumentos* ) | **(** *expressão* **)** | **nao** *fator*.<br/><br/>
 *se* = **se** *expressão* **entao** **⏎** *bloco* { **senao_se** *expressão* **entao** **⏎** *bloco* } [ **senao** **⏎** *bloco* ] **fim_se**.<br/>
